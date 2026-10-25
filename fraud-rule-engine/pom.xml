@@ -29,7 +29,7 @@
 		<maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
 		<spotless-maven-plugin.version>2.43.0</spotless-maven-plugin.version>
 		<google-java-format.version>1.25.2</google-java-format.version>
-		<json-schema-validator.version>1.5.6</json-schema-validator.version>
+		<json-schema-validator.version>3.0.8</json-schema-validator.version>
 	</properties>
 
 	<dependencies>

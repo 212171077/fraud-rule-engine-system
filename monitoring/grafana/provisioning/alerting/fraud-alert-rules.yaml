@@ -1,0 +1,298 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: fraud-rule-engine-assessment
+    folder: Fraud Rule Engine
+    interval: 1m
+    rules:
+      - uid: fre-5xx-sustained
+        title: HTTP server errors sustained above 5%
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: Non-Actuator HTTP failures exceed 5% for 10 minutes
+          description: >-
+            Server-error share is {{ with $values.B }}{{ humanizePercentage .Value }}{{ else }}unavailable (idle or below traffic guard){{ end }}.
+            Fires above 5% of non-Actuator requests over a rolling 5m window,
+            only with more than 20 requests in that window, sustained for 10m.
+            API callers may be receiving failed responses. Check application logs,
+            database reachability and recent changes; compare HTTP latency and pool pressure.
+            Health/metrics polling is excluded so it cannot dilute the error ratio.
+            Resolves when the ratio or traffic guard clears at an evaluation.
+            This is an uncalibrated assessment threshold, not a production SLO.
+          __dashboardUid__: fraud-service-reliability
+          __panelId__: "4"
+          runbook: docs/runbook.md#alerts
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '(sum(rate(http_server_requests_seconds_count{application="fraud-rule-engine",uri!~"/actuator.*",status=~"5.."}[5m])) or (0 * sum(rate(http_server_requests_seconds_count{application="fraud-rule-engine",uri!~"/actuator.*"}[5m])))) / sum(rate(http_server_requests_seconds_count{application="fraud-rule-engine",uri!~"/actuator.*"}[5m])) and on() (sum(increase(http_server_requests_seconds_count{application="fraud-rule-engine",uri!~"/actuator.*"}[5m])) > 20)'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: threshold, expression: B, conditions: [{evaluator: {type: gt, params: [0.05]}}]}
+      - uid: fre-eval-failures
+        title: Kafka listener failures sustained above 20%
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 20% of Kafka listener attempts fail for 10 minutes
+          description: >-
+            Failed-attempt share is {{ with $values.B }}{{ humanizePercentage .Value }}{{ else }}unavailable (idle or below traffic guard){{ end }}.
+            Fires above 20% failed/received attempts over a rolling 10m window,
+            with more than 10 received attempts, sustained for 10m.
+            Retries count as additional attempts; this is not a unique-event failure rate.
+            Fraud processing may be delayed or routed to the DLQ.
+            Check bounded failure codes in application logs, database/reference availability,
+            listener duration and acknowledged DLQ publishes. Do not copy event payloads into tickets.
+            Resolves when the ratio or traffic guard clears at an evaluation.
+            Thresholds are uncalibrated assessment defaults.
+          __dashboardUid__: fraud-kafka-processing
+          __panelId__: "7"
+          runbook: docs/runbook.md#alerts
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '(sum(increase(fraud_kafka_events_total{application="fraud-rule-engine",outcome="failed"}[10m])) or (0 * sum(increase(fraud_kafka_events_total{application="fraud-rule-engine",outcome="received"}[10m])))) / sum(increase(fraud_kafka_events_total{application="fraud-rule-engine",outcome="received"}[10m])) and on() (sum(increase(fraud_kafka_events_total{application="fraud-rule-engine",outcome="received"}[10m])) > 10)'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: threshold, expression: B, conditions: [{evaluator: {type: gt, params: [0.2]}}]}
+      - uid: fre-consumer-lag
+        title: Kafka consumer lag sustained above 1000 records
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: A Kafka consumer is more than 1000 records behind for 10 minutes
+          description: >-
+            Worst client-reported partition lag is {{ with $values.B }}{{ printf "%.0f" .Value }}{{ else }}unavailable{{ end }} records.
+            Fires above 1000 records for 10m; this is the maximum, not total backlog.
+            Fraud assessments may be delayed. Compare listener throughput and duration,
+            inspect consumer health/rebalances and Kafka availability, then check database pressure.
+            Missing consumer metrics are not proof of zero lag.
+            Resolves when observed lag is at or below 1000 at an evaluation.
+            Thresholds are uncalibrated assessment defaults.
+          __dashboardUid__: fraud-kafka-processing
+          __panelId__: "8"
+          runbook: docs/runbook.md#alerts
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'max(kafka_consumer_fetch_manager_records_lag_max{application="fraud-rule-engine"})'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: threshold, expression: B, conditions: [{evaluator: {type: gt, params: [1000]}}]}
+      - uid: fre-dlq-growth
+        title: Kafka events published to the dead-letter topic
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: At least one dead-letter publish was observed in the last 15 minutes
+          description: >-
+            Estimated acknowledged DLQ publishes in the rolling 15m window:
+            {{ with $values.B }}{{ printf "%.2f" .Value }}{{ else }}unavailable{{ end }}. Fires on any observed increase without a pending period.
+            Invalid records or exhausted processing failures require operator triage.
+            This counter is successful publications, not DLQ depth or unique transactions;
+            increase() extrapolation can produce fractional values.
+            Inspect safe failure codes/source coordinates in a protected session.
+            Fix the cause before an explicitly approved replay; preserve event ID/key
+            and never paste original payloads into logs or tickets.
+            Resolves when no publish increase remains in the 15m window,
+            not when messages are removed from the DLQ.
+            A first increment before the counter's first baseline scrape can be missed.
+          __dashboardUid__: fraud-kafka-processing
+          __panelId__: "10"
+          runbook: docs/runbook.md#alerts
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(increase(fraud_kafka_dlq_messages_total{application="fraud-rule-engine"}[15m]))'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: threshold, expression: B, conditions: [{evaluator: {type: gt, params: [0]}}]}
+      - uid: fre-inactivity
+        title: No Kafka attempts received (expected traffic only)
+        condition: C
+        for: 30m
+        noDataState: NoData
+        isPaused: true
+        execErrState: Error
+        labels:
+          severity: info
+        annotations:
+          summary: No received Kafka attempts in a 30-minute window, sustained for 30 minutes
+          description: >-
+            Paused by default: idle synthetic stacks are normal. Enable only after the operator
+            confirms an expected-traffic period. The condition is no received attempts in a rolling
+            30m window, then a further 30m pending period (about 60m after the last observed activity).
+            This monitors receipt, not successful processing. Check the producer, input topic,
+            consumer assignment and broker connectivity before changing rules.
+            Missing series use Grafana NoData handling rather than implying zero traffic.
+            Resolves when an increase in received attempts is observed.
+          __dashboardUid__: fraud-kafka-processing
+          __panelId__: "7"
+          runbook: docs/runbook.md#alerts
+        data:
+          - refId: A
+            relativeTimeRange: {from: 1800, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(increase(fraud_kafka_events_total{application="fraud-rule-engine",outcome="received"}[30m])) == bool 0'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: threshold, expression: B, conditions: [{evaluator: {type: gt, params: [0]}}]}
+      - uid: fre-latency-p95
+        title: Kafka listener p95 processing exceeds 1 second
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: Kafka listener p95 attempt duration exceeds 1 second for 10 minutes
+          description: >-
+            Estimated p95 duration is {{ with $values.B }}{{ printf "%.3f" .Value }}{{ else }}unavailable{{ end }} seconds,
+            calculated from the rolling 10m histogram and sustained above 1s for 10m.
+            Includes decoding, key validation and processing of successful/failed listener attempts;
+            excludes retry backoff, queue wait and DLQ publication. Not evaluation-only or end-to-end latency.
+            Slow processing may increase consumer lag. Check database acquisition waits,
+            long transactions, JVM CPU/GC and reference-data lookups.
+            Resolves when p95 is at or below 1s or the histogram becomes idle.
+            Sparse samples make percentiles unstable; this is an uncalibrated assessment objective.
+          __dashboardUid__: fraud-kafka-processing
+          __panelId__: "11"
+          runbook: docs/runbook.md#alerts
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'histogram_quantile(0.95, sum by (le) (rate(fraud_kafka_processing_duration_seconds_bucket{application="fraud-rule-engine"}[10m])))'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: threshold, expression: B, conditions: [{evaluator: {type: gt, params: [1]}}]}
+      - uid: fre-db-pool
+        title: Database connection acquisition waiting for 5 minutes
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: Database connection acquisition has had waiting threads for 5 minutes
+          description: >-
+            Maximum pending acquisition count is {{ with $values.B }}{{ printf "%.0f" .Value }}{{ else }}unavailable{{ end }}.
+            Fires when pending threads remain above zero for 5m.
+            HTTP and Kafka processing may block or time out. Waiting alone does not prove
+            a database outage or establish that the pool is undersized.
+            Check PostgreSQL reachability, active/idle/max connections, acquisition timeouts,
+            and long transactions before considering a pool-size change.
+            Resolves when no threads are waiting at an evaluation.
+            Thresholds are uncalibrated assessment defaults.
+          __dashboardUid__: fraud-service-reliability
+          __panelId__: "13"
+          runbook: docs/runbook.md#alerts
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'max(hikaricp_connections_pending{application="fraud-rule-engine"})'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: threshold, expression: B, conditions: [{evaluator: {type: gt, params: [0]}}]}
+      - uid: fre-app-down
+        title: Application metrics unreachable or target missing
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: An application scrape fails or its target series is absent for 5 minutes
+          description: >-
+            Prometheus cannot observe at least one application target, or no application up series
+            exists, for 5m. Monitoring is blind; this does not alone prove the application is down.
+            Check /actuator/health, startup/Flyway logs, Prometheus targets and container DNS/TCP paths.
+            A 403 indicates the fixed Prometheus source allowlist may not match; do not broaden it.
+            A connection timeout can indicate Docker bridge forwarding failure.
+            Resolves when every configured application target is scraped successfully.
+            Grafana datasource/query errors remain separate Error alerts.
+          __dashboardUid__: fraud-service-reliability
+          __panelId__: "2"
+          runbook: docs/runbook.md#alerts
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '(1 - min(up{job="fraud-rule-engine"})) or absent(up{job="fraud-rule-engine"})'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: threshold, expression: B, conditions: [{evaluator: {type: gt, params: [0]}}]}

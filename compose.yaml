@@ -1,0 +1,164 @@
+name: fraud-rule-engine
+
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fraud_rule_engine}
+      POSTGRES_USER: ${POSTGRES_USER:-fraud_rule_engine}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - backend
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093,HOST://:19092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,HOST://localhost:${KAFKA_PORT:-19092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "127.0.0.1:${KAFKA_PORT:-19092}:19092"
+    networks:
+      - backend
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fraud-rule-engine:local
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-fraud_rule_engine}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-fraud_rule_engine}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+      FRAUD_SECURITY_LOCAL_AUTH_ENABLED: "true"
+      FRAUD_SECURITY_LOCAL_AUTH_ISSUER: ${FRAUD_SECURITY_LOCAL_AUTH_ISSUER:-http://localhost:8080}
+      FRAUD_SECURITY_LOCAL_AUTH_AUDIENCE: ${FRAUD_SECURITY_LOCAL_AUTH_AUDIENCE:-fraud-rule-engine-api}
+      FRAUD_SECURITY_LOCAL_AUTH_SIGNING_KEY_BASE64: ${FRAUD_SECURITY_LOCAL_AUTH_SIGNING_KEY_BASE64:-}
+      FRAUD_SECURITY_LOCAL_AUTH_BOOTSTRAP_TOKEN: ${FRAUD_SECURITY_LOCAL_AUTH_BOOTSTRAP_TOKEN:-}
+      FRAUD_SECURITY_LOCAL_AUTH_ACCESS_TOKEN_LIFETIME: ${FRAUD_SECURITY_LOCAL_AUTH_ACCESS_TOKEN_LIFETIME:-PT5M}
+      FRAUD_DOCS_ENABLED: ${FRAUD_DOCS_ENABLED:-false}
+      FRAUD_SECURITY_METRICS_ALLOWED_CIDR: ${PROMETHEUS_METRICS_IP:-172.30.0.10}/32
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    networks:
+      - backend
+      - monitoring
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/healthcheck", "HealthCheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 45s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: fraud-rule-engine-web/Dockerfile
+    image: fraud-rule-engine-web:local
+    volumes:
+      - ./docker/web/local-app-config.json:/srv/app-config.json:ro
+    ports:
+      - "127.0.0.1:${WEB_PORT:-4200}:8080"
+    networks:
+      - backend
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      monitoring:
+        ipv4_address: ${PROMETHEUS_METRICS_IP:-172.30.0.10}
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    environment:
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: ${GRAFANA_SMTP_HOST:-mailpit:1025}
+      GF_SMTP_FROM_ADDRESS: ${GRAFANA_SMTP_FROM:-grafana@fraud-rule-engine.local}
+      FRAUD_ALERT_EMAIL_TO: ${FRAUD_ALERT_EMAIL_TO:-fraud-ops@example.invalid}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+      - mailpit
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+    name: fraud-rule-engine-postgres-data
+networks:
+  backend:
+    name: fraud-rule-engine-backend
+  monitoring:
+    name: fraud-rule-engine-monitoring
+    ipam:
+      config:
+        - subnet: ${MONITORING_SUBNET:-172.30.0.0/24}

@@ -1,0 +1,100 @@
+:root {
+  --brand-blue: #00486d;
+  --brand-red: #e63934;
+  --text-primary: #20272b;
+  --text-muted: #58666d;
+  --surface: #fff;
+  --page-background: #f4f6f7;
+  --border: #d6dee2;
+  --content-max-width: 80rem;
+  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text-primary);
+  background: var(--page-background);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--page-background);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.eyebrow {
+  color: #b72c28;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  margin: 0 0 0.75rem;
+}
+
+.primary-button,
+.secondary-button {
+  border: 1px solid var(--brand-blue);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 0.55rem 0.85rem;
+}
+
+.primary-button {
+  background: var(--brand-blue);
+  color: #fff;
+}
+
+.secondary-button {
+  background: #fff;
+  color: var(--brand-blue);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid #2f70ef;
+  outline-offset: 3px;
+}
+
+::selection {
+  background: #d6e7ee;
+  color: var(--brand-blue);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

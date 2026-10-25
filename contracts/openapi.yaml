@@ -1,0 +1,800 @@
+openapi: 3.1.0
+info:
+  title: Fraud Rule Engine API
+  version: 1.0.0
+  description: >
+    Assessment API for retrieving persisted synthetic fraud evaluations and
+    managing versioned rule configurations. This is not an approved upstream
+    or production contract. All timestamps are RFC 3339 instants. Search and
+    summary intervals are half-open [from, to), and cannot exceed 90 days.
+    Local user and password endpoints are assessment-only and require the
+    explicitly enabled local-auth mode.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+tags:
+  - name: Evaluations
+  - name: Rules
+  - name: Authentication
+  - name: Users
+paths:
+  /api/v1/auth/register:
+    post:
+      tags: [Authentication]
+      operationId: registerUser
+      summary: Register an account pending administrator approval
+      description: >
+        Public assessment registration, available after first-admin bootstrap.
+        The server assigns AUDITOR and PENDING; role/status fields are rejected.
+        No token is issued and login is denied until an administrator sets ACTIVE.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/RegisterRequest"}
+      responses:
+        "201":
+          description: Pending account created without credentials in the response.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "409":
+          description: Email already registered or first administrator has not been bootstrapped.
+  /api/v1/auth/bootstrap:
+    post:
+      tags: [Authentication]
+      operationId: bootstrapLocalAdministrator
+      summary: Create the first local administrator
+      description: Assessment-only, one-time operation. Requires the externally configured bootstrap token and succeeds only while no users exist.
+      security: []
+      parameters:
+        - name: X-Bootstrap-Token
+          in: header
+          required: true
+          schema: {type: string, minLength: 32}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BootstrapRequest"
+      responses:
+        "201":
+          description: First administrator created.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "403": {description: Bootstrap token is invalid or bootstrap is disabled.}
+        "409": {$ref: "#/components/responses/Problem"}
+  /api/v1/auth/login:
+    post:
+      tags: [Authentication]
+      operationId: loginLocalUser
+      summary: Authenticate a local interactive user
+      description: Assessment-only. Issues a short-lived bearer token; failures are generic and audited.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/LoginRequest"}
+      responses:
+        "200":
+          description: Short-lived access token and safe user profile.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/LoginResponse"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {description: Credentials are invalid, the account is pending/disabled, or the account is locked.}
+  /api/v1/auth/me:
+    get:
+      tags: [Authentication]
+      operationId: getCurrentUser
+      summary: Read the authenticated user's profile and permissions
+      responses:
+        "200":
+          description: Current user identity and centrally derived permissions.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CurrentUser"}
+        "401": {description: Missing, invalid, expired, or revoked bearer token.}
+  /api/v1/auth/password:
+    patch:
+      tags: [Authentication]
+      operationId: changeOwnPassword
+      summary: Change the authenticated user's password
+      description: Requires the current password. Existing access tokens are revoked; sign in again with the new password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ChangePasswordRequest"}
+      responses:
+        "200": {description: Password changed; response body is empty.}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {description: Current password is invalid or token is missing/invalid.}
+  /api/v1/users:
+    post:
+      tags: [Users]
+      operationId: createUser
+      summary: Create an interactive user or credentialless service identity
+      description: Administrator-only. Role assignment is accepted only here; account status is changed through the dedicated administrator endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CreateUserRequest"}
+      responses:
+        "201":
+          description: Created safe user profile.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {description: Missing or invalid bearer token.}
+        "403": {description: Administrator role required.}
+        "409": {$ref: "#/components/responses/Problem"}
+    get:
+      tags: [Users]
+      operationId: listUsers
+      summary: List users
+      description: Administrator-only, paginated with a maximum page size of 100.
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Page of safe user profiles.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/UserPage"}
+        "401": {description: Missing or invalid bearer token.}
+        "403": {description: Administrator role required.}
+  /api/v1/users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Users]
+      operationId: getUser
+      summary: Read a user profile
+      description: Administrators may read any profile; analysts and auditors may read their own only.
+      responses:
+        "200":
+          description: Safe user profile with no password hash or credential fields.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+        "401": {description: Missing or invalid bearer token.}
+        "403": {description: Role is not permitted to access user profiles.}
+        "404": {$ref: "#/components/responses/Problem"}
+    patch:
+      tags: [Users]
+      operationId: updateUserProfile
+      summary: Update permitted profile fields
+      description: Users may update their own display name or email; administrators may update another profile. Role and status fields are not accepted here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PatchUserProfileRequest"}
+      responses:
+        "200":
+          description: Updated user profile.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {description: Missing or invalid bearer token.}
+        "403": {description: Role is not permitted to update this profile.}
+        "404": {$ref: "#/components/responses/Problem"}
+        "409": {$ref: "#/components/responses/Problem"}
+  /api/v1/users/{id}/role:
+    patch:
+      tags: [Users]
+      operationId: changeUserRole
+      summary: Change a user's role
+      description: Administrator-only; self-role changes and SERVICE role transitions are denied. Existing access tokens are revoked by token-version increment.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ChangeRoleRequest"}
+      responses:
+        "200":
+          description: Updated user profile.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {description: Missing or invalid bearer token.}
+        "403": {description: Administrator role required or a self-role change was attempted.}
+        "404": {$ref: "#/components/responses/Problem"}
+  /api/v1/users/{id}/status:
+    patch:
+      tags: [Users]
+      operationId: changeUserStatus
+      summary: Activate or disable a user
+      description: Administrator-only; set ACTIVE to approve a pending registration. Administrators cannot change their own account status. Status changes revoke existing access tokens.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ChangeStatusRequest"}
+      responses:
+        "200":
+          description: Updated user profile.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {description: Missing or invalid bearer token.}
+        "403": {description: Administrator role required or self-status change attempted.}
+        "404": {$ref: "#/components/responses/Problem"}
+  /api/v1/fraud-evaluations:
+    get:
+      tags: [Evaluations]
+      operationId: searchFraudEvaluations
+      summary: Search persisted evaluation summaries
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: decision
+          in: query
+          schema:
+            $ref: "#/components/schemas/FraudDecision"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ProcessingStatus"
+        - name: eventId
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: ["evaluatedAt,asc", "evaluatedAt,desc", "riskScore,asc", "riskScore,desc"]
+            default: evaluatedAt,desc
+      responses:
+        "200":
+          description: A bounded page of persisted evaluation summaries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvaluationPage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          description: Missing or invalid bearer token.
+  /api/v1/fraud-evaluations/{evaluationId}:
+    get:
+      tags: [Evaluations]
+      operationId: getFraudEvaluation
+      summary: Get evaluation decision, safe evidence, and effective versions
+      parameters:
+        - name: evaluationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Persisted evaluation detail; subject identifiers are omitted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evaluation"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          description: Missing or invalid bearer token.
+        "404":
+          $ref: "#/components/responses/Problem"
+  /api/v1/fraud-evaluations/summary:
+    get:
+      tags: [Evaluations]
+      operationId: summarizeFraudEvaluations
+      summary: Aggregate persisted decisions for a bounded time window
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Counts and percentages by persisted decision.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvaluationSummary"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          description: Missing or invalid bearer token.
+  /api/v1/fraud-rules:
+    get:
+      tags: [Rules]
+      operationId: listFraudRules
+      summary: List rule configurations effective at the requested instant
+      parameters:
+        - name: effectiveAt
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Effective rule configurations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RuleConfiguration"
+        "401":
+          description: Missing or invalid bearer token.
+    post:
+      tags: [Rules]
+      operationId: createFraudRule
+      summary: Create a supported rule configuration
+      description: Requires the ADMIN role. Creates a new immutable configuration snapshot and audit record.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRuleRequest"
+      responses:
+        "201":
+          description: Created configuration version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleConfiguration"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Administrator role required.
+        "409":
+          $ref: "#/components/responses/Problem"
+  /api/v1/fraud-rules/{ruleCode}:
+    patch:
+      tags: [Rules]
+      operationId: updateFraudRule
+      summary: Create a new version of a rule configuration
+      description: Requires the ADMIN role. Existing evaluation snapshots remain immutable. Supplying parameters replaces the full parameter map.
+      parameters:
+        - $ref: "#/components/parameters/RuleCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchRuleRequest"
+      responses:
+        "200":
+          description: Updated configuration version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleConfiguration"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          description: Missing or invalid bearer token.
+        "403":
+          description: Administrator role required.
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [Rules]
+      operationId: deactivateFraudRule
+      summary: Schedule a rule configuration deactivation
+      description: Requires the ADMIN role. DELETE does not erase historical configuration or evaluation records.
+      parameters:
+        - $ref: "#/components/parameters/RuleCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeactivateRuleRequest"
+      responses:
+        "200":
+          description: Disabled configuration version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleConfiguration"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          description: Missing or invalid bearer token.
+        "403":
+          description: Administrator role required.
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+  /api/v1/fraud-rules/{ruleCode}/history:
+    get:
+      tags: [Rules]
+      operationId: getFraudRuleAuditHistory
+      summary: Read immutable configuration audit history
+      parameters:
+        - $ref: "#/components/parameters/RuleCode"
+      responses:
+        "200":
+          description: Audit actions ordered newest first; actor references are one-way hashes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleHistory"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          description: Missing or invalid bearer token.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    From:
+      name: from
+      in: query
+      required: true
+      description: Inclusive start of the maximum 90-day query interval.
+      schema:
+        type: string
+        format: date-time
+    To:
+      name: to
+      in: query
+      required: true
+      description: Exclusive end of the query interval.
+      schema:
+        type: string
+        format: date-time
+    RuleCode:
+      name: ruleCode
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[A-Z][A-Z0-9_]{0,63}$"
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 0, default: 0}
+    PageSize:
+      name: size
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+  responses:
+    Problem:
+      description: RFC 9457 Problem Details response.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    UserRole:
+      type: string
+      enum: [ADMIN, FRAUD_ANALYST, AUDITOR, SERVICE]
+    UserStatus:
+      type: string
+      enum: [PENDING, ACTIVE, DISABLED]
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [name, surname, email, password]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        surname: {type: string, minLength: 1, maxLength: 100}
+        email: {type: string, format: email, maxLength: 254}
+        password:
+          type: string
+          minLength: 12
+          maxLength: 72
+          writeOnly: true
+          description: At most 72 UTF-8 bytes; stored only as a BCrypt hash.
+    BootstrapRequest:
+      type: object
+      additionalProperties: false
+      required: [name, surname, email, password]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        surname: {type: string, minLength: 1, maxLength: 100}
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, minLength: 12, maxLength: 72, writeOnly: true}
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, maxLength: 72, writeOnly: true}
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: {type: string, maxLength: 72, writeOnly: true}
+        newPassword: {type: string, minLength: 12, maxLength: 72, writeOnly: true}
+    CreateUserRequest:
+      type: object
+      additionalProperties: false
+      required: [name, surname, email, role]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        surname:
+          type: string
+          maxLength: 100
+          description: Required for interactive roles; may be empty for SERVICE identities.
+        email: {type: string, format: email, maxLength: 254}
+        role: {$ref: "#/components/schemas/UserRole"}
+        password:
+          type: [string, "null"]
+          minLength: 12
+          maxLength: 72
+          writeOnly: true
+          description: Required for interactive roles; must be omitted for SERVICE.
+    PatchUserProfileRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: {type: [string, "null"], minLength: 1, maxLength: 100}
+        surname: {type: [string, "null"], minLength: 1, maxLength: 100}
+        email: {type: [string, "null"], format: email, maxLength: 254}
+    ChangeRoleRequest:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role: {$ref: "#/components/schemas/UserRole"}
+    ChangeStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: {$ref: "#/components/schemas/UserStatus"}
+    User:
+      type: object
+      required: [id, name, surname, email, role, status, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, maxLength: 100}
+        surname:
+          type: string
+          maxLength: 100
+          description: Empty for legacy accounts migrated from the previous display-name field.
+        email: {type: string, format: email, maxLength: 254}
+        role: {$ref: "#/components/schemas/UserRole"}
+        status: {$ref: "#/components/schemas/UserStatus"}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    UserPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages]
+      properties:
+        content:
+          type: array
+          items: {$ref: "#/components/schemas/User"}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1, maximum: 100}
+        totalElements: {type: integer, minimum: 0}
+        totalPages: {type: integer, minimum: 0}
+    CurrentUser:
+      type: object
+      required: [id, name, surname, email, role, permissions]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        surname:
+          type: string
+          description: Empty for legacy profiles migrated from the previous display-name field.
+        email: {type: string, format: email}
+        role: {$ref: "#/components/schemas/UserRole"}
+        permissions:
+          type: array
+          items: {type: string}
+    LoginResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn, user]
+      properties:
+        accessToken: {type: string, writeOnly: true}
+        tokenType: {type: string, const: Bearer}
+        expiresIn: {type: integer, minimum: 1, maximum: 900}
+        user: {$ref: "#/components/schemas/User"}
+    FraudDecision:
+      type: string
+      enum: [CLEAR, REVIEW, HIGH_RISK, UNDETERMINED]
+    ProcessingStatus:
+      type: string
+      enum: [RECEIVED, EVALUATING, COMPLETED, FAILED]
+    EvaluationListItem:
+      type: object
+      required: [evaluationId, eventId, evaluatedAt, occurredAt, category, decision, status, riskScore]
+      properties:
+        evaluationId: {type: string, format: uuid}
+        eventId: {type: string, maxLength: 128}
+        evaluatedAt: {type: string, format: date-time}
+        occurredAt: {type: string, format: date-time}
+        category: {type: string, maxLength: 64}
+        decision: {$ref: "#/components/schemas/FraudDecision"}
+        status: {$ref: "#/components/schemas/ProcessingStatus"}
+        riskScore: {type: number, minimum: 0, maximum: 100}
+    EvaluationPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages]
+      properties:
+        content:
+          type: array
+          items: {$ref: "#/components/schemas/EvaluationListItem"}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1, maximum: 100}
+        totalElements: {type: integer, minimum: 0}
+        totalPages: {type: integer, minimum: 0}
+    RuleEvaluation:
+      type: object
+      required: [ruleCode, configurationVersion, outcome, evidence]
+      properties:
+        ruleCode: {type: string}
+        configurationVersion: {type: integer, minimum: 1}
+        outcome:
+          type: string
+          enum: [MATCH, NO_MATCH, NOT_APPLICABLE, FAILED]
+        reasonCode: {type: [string, "null"], pattern: "^[A-Z][A-Z0-9_]{0,63}$"}
+        evidence:
+          type: object
+          additionalProperties: {type: string, maxLength: 128}
+    Evaluation:
+      allOf:
+        - $ref: "#/components/schemas/EvaluationListItem"
+        - type: object
+          required: [amount, currency, ruleConfigurationVersion, referenceDataVersions, rules]
+          properties:
+            amount: {type: number, minimum: 0}
+            currency: {type: string, pattern: "^[A-Z]{3}$"}
+            ruleConfigurationVersion: {type: integer, minimum: 1}
+            referenceDataVersions:
+              type: object
+              additionalProperties: {type: integer, minimum: 1}
+            rules:
+              type: array
+              items: {$ref: "#/components/schemas/RuleEvaluation"}
+    EvaluationSummary:
+      type: object
+      required: [from, to, total, decisions, decisionPercentages]
+      properties:
+        from: {type: string, format: date-time}
+        to: {type: string, format: date-time}
+        total: {type: integer, minimum: 0}
+        decisions:
+          type: object
+          additionalProperties: {type: integer, minimum: 0}
+        decisionPercentages:
+          type: object
+          additionalProperties: {type: number, minimum: 0, maximum: 100}
+    RuleConfiguration:
+      type: object
+      required: [ruleCode, version, enabled, effectiveFrom, scoreContribution, parameters]
+      properties:
+        ruleCode: {type: string, pattern: "^[A-Z][A-Z0-9_]{0,63}$"}
+        version: {type: integer, minimum: 1}
+        enabled: {type: boolean}
+        effectiveFrom: {type: string, format: date-time}
+        effectiveUntil: {type: [string, "null"], format: date-time}
+        scoreContribution: {type: number, minimum: 0}
+        parameters:
+          type: object
+          maxProperties: 128
+          additionalProperties: {type: string, maxLength: 256}
+    CreateRuleRequest:
+      type: object
+      additionalProperties: false
+      required: [ruleCode, enabled, scoreContribution, parameters, reasonCode]
+      properties:
+        ruleCode: {type: string, pattern: "^[A-Z][A-Z0-9_]{0,63}$"}
+        enabled: {type: boolean}
+        scoreContribution: {type: number, minimum: 0}
+        parameters:
+          type: object
+          maxProperties: 128
+          additionalProperties: {type: string, maxLength: 256}
+        effectiveAt: {type: [string, "null"], format: date-time}
+        reasonCode: {type: string, pattern: "^[A-Z][A-Z0-9_]{0,63}$"}
+    PatchRuleRequest:
+      type: object
+      additionalProperties: false
+      required: [reasonCode]
+      properties:
+        enabled: {type: [boolean, "null"]}
+        scoreContribution: {type: [number, "null"], minimum: 0}
+        parameters:
+          type: [object, "null"]
+          maxProperties: 128
+          additionalProperties: {type: string, maxLength: 256}
+        effectiveAt: {type: [string, "null"], format: date-time}
+        reasonCode: {type: string, pattern: "^[A-Z][A-Z0-9_]{0,63}$"}
+    DeactivateRuleRequest:
+      type: object
+      additionalProperties: false
+      required: [reasonCode]
+      properties:
+        effectiveAt: {type: [string, "null"], format: date-time}
+        reasonCode: {type: string, pattern: "^[A-Z][A-Z0-9_]{0,63}$"}
+    AuditRecord:
+      type: object
+      required: [ruleCode, configurationVersion, action, actorReference, reasonCode, occurredAt]
+      properties:
+        ruleCode: {type: string}
+        configurationVersion: {type: integer}
+        action: {type: string, enum: [CREATED, UPDATED, DISABLED, DELETED]}
+        actorReference: {type: string, pattern: "^[a-f0-9]{64}$"}
+        reasonCode: {type: string}
+        occurredAt: {type: string, format: date-time}
+    RuleHistory:
+      type: object
+      required: [ruleCode, history]
+      properties:
+        ruleCode: {type: string}
+        history:
+          type: array
+          items: {$ref: "#/components/schemas/AuditRecord"}
+    Problem:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: {type: string, format: uri}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        instance: {type: string, format: uri-reference}
+        code: {type: string}
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: {type: string}

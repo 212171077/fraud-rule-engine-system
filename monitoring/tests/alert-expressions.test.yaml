@@ -1,0 +1,112 @@
+# Run with the same Prometheus version as Compose; see ../grafana/dashboards/README.md.
+# MonitoringConfigurationTest prevents these expressions drifting from Grafana provisioning.
+rule_files: []
+evaluation_interval: 1m
+# rate() division can differ by a final floating-point bit.
+fuzzy_compare: true
+tests:
+  - name: "fre-5xx-sustained: real errors are not diluted by health polling"
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{application="fraud-rule-engine",uri="/api/v1/users",status="200"}'
+        values: "0+90x10"
+      - series: 'http_server_requests_seconds_count{application="fraud-rule-engine",uri="/api/v1/users",status="500"}'
+        values: "0+10x10"
+      - series: 'http_server_requests_seconds_count{application="fraud-rule-engine",uri="/actuator/health",status="200"}'
+        values: "0+10000x10"
+    promql_expr_test:
+      - expr: &http '(sum(rate(http_server_requests_seconds_count{application="fraud-rule-engine",uri!~"/actuator.*",status=~"5.."}[5m])) or (0 * sum(rate(http_server_requests_seconds_count{application="fraud-rule-engine",uri!~"/actuator.*"}[5m])))) / sum(rate(http_server_requests_seconds_count{application="fraud-rule-engine",uri!~"/actuator.*"}[5m])) and on() (sum(increase(http_server_requests_seconds_count{application="fraud-rule-engine",uri!~"/actuator.*"}[5m])) > 20)'
+        eval_time: 5m
+        exp_samples: [{labels: "{}", value: 0.1}]
+  - name: "fre-5xx-sustained: successful traffic with no 5xx series is zero"
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{application="fraud-rule-engine",uri="/api/v1/users",status="200"}'
+        values: "0+100x10"
+    promql_expr_test:
+      - expr: *http
+        eval_time: 5m
+        exp_samples: [{labels: "{}", value: 0}]
+  - name: "fre-5xx-sustained: low-volume failures do not pass the traffic guard"
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{application="fraud-rule-engine",uri="/api/v1/users",status="500"}'
+        values: "0+1x10"
+    promql_expr_test:
+      - expr: *http
+        eval_time: 5m
+        exp_samples: []
+  - name: "fre-5xx-sustained: idle traffic produces no ratio"
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{application="fraud-rule-engine",uri="/api/v1/users",status="200"}'
+        values: "0+0x10"
+    promql_expr_test:
+      - expr: *http
+        eval_time: 5m
+        exp_samples: []
+  - name: "fre-eval-failures: failed attempts include retries"
+    interval: 1m
+    input_series:
+      - series: 'fraud_kafka_events_total{application="fraud-rule-engine",outcome="received"}'
+        values: "0+100x20"
+      - series: 'fraud_kafka_events_total{application="fraud-rule-engine",outcome="failed"}'
+        values: "0+25x20"
+    promql_expr_test:
+      - expr: &failures '(sum(increase(fraud_kafka_events_total{application="fraud-rule-engine",outcome="failed"}[10m])) or (0 * sum(increase(fraud_kafka_events_total{application="fraud-rule-engine",outcome="received"}[10m])))) / sum(increase(fraud_kafka_events_total{application="fraud-rule-engine",outcome="received"}[10m])) and on() (sum(increase(fraud_kafka_events_total{application="fraud-rule-engine",outcome="received"}[10m])) > 10)'
+        eval_time: 10m
+        exp_samples: [{labels: "{}", value: 0.25}]
+  - name: "fre-eval-failures: absent failure counter with traffic is zero"
+    interval: 1m
+    input_series:
+      - series: 'fraud_kafka_events_total{application="fraud-rule-engine",outcome="received"}'
+        values: "0+100x20"
+    promql_expr_test:
+      - expr: *failures
+        eval_time: 10m
+        exp_samples: [{labels: "{}", value: 0}]
+  - name: "fre-eval-failures: exactly ten attempts do not pass the traffic guard"
+    interval: 1m
+    input_series:
+      - series: 'fraud_kafka_events_total{application="fraud-rule-engine",outcome="received"}'
+        values: "0+1x20"
+      - series: 'fraud_kafka_events_total{application="fraud-rule-engine",outcome="failed"}'
+        values: "0+1x20"
+    promql_expr_test:
+      - expr: *failures
+        eval_time: 10m
+        exp_samples: []
+  - name: "fre-app-down: missing target is detected"
+    interval: 1m
+    input_series: []
+    promql_expr_test:
+      - expr: &down '(1 - min(up{job="fraud-rule-engine"})) or absent(up{job="fraud-rule-engine"})'
+        eval_time: 5m
+        exp_samples: [{labels: '{job="fraud-rule-engine"}', value: 1}]
+  - name: "fre-app-down: failed scrape is detected"
+    interval: 1m
+    input_series:
+      - series: 'up{job="fraud-rule-engine",instance="app:8080"}'
+        values: "0+0x10"
+    promql_expr_test:
+      - expr: *down
+        eval_time: 5m
+        exp_samples: [{labels: "{}", value: 1}]
+  - name: "fre-app-down: healthy target is not down"
+    interval: 1m
+    input_series:
+      - series: 'up{job="fraud-rule-engine",instance="app:8080"}'
+        values: "1+0x10"
+    promql_expr_test:
+      - expr: *down
+        eval_time: 5m
+        exp_samples: [{labels: "{}", value: 0}]
+  - name: "fre-dlq-growth: rolling publishes are estimated rather than queue depth"
+    interval: 1m
+    input_series:
+      - series: 'fraud_kafka_dlq_messages_total{application="fraud-rule-engine"}'
+        values: "0+1x20"
+    promql_expr_test:
+      - expr: 'sum(increase(fraud_kafka_dlq_messages_total{application="fraud-rule-engine"}[15m]))'
+        eval_time: 15m
+        exp_samples: [{labels: "{}", value: 15}]

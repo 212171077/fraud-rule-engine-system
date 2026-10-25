@@ -1,0 +1,143 @@
+{
+  "uid": "fraud-operations",
+  "title": "Fraud Operations",
+  "description": "Operational decision and rule trends for the synthetic assessment. Not unique transaction counts, calibrated fraud predictions, or payment decisions.",
+  "tags": ["fraud-rule-engine", "fraud", "assessment"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 2,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {"from": "now-1h", "to": "now"},
+  "links": [
+    {"title": "Service Reliability", "type": "link", "url": "/d/fraud-service-reliability", "keepTime": true},
+    {"title": "Kafka Processing", "type": "link", "url": "/d/fraud-kafka-processing", "keepTime": true},
+    {"title": "Alert rules", "type": "link", "url": "/alerting/list"}
+  ],
+  "panels": [
+    {
+      "id": 1, "type": "text", "title": "Read this dashboard",
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+      "options": {"mode": "markdown", "content": "**ASSESSMENT / SYNTHETIC DATA**  |  Explore decisions, review workload and rule behaviour.\n\nAll window totals follow the time picker and are **Prometheus estimates**. Retries and committed-event redelivery can be counted again. Blank means no samples, not zero risk. Use the protected evaluation API / PostgreSQL for durable investigations. No payment is approved or declined by this service."}
+    },
+    {
+      "id": 2, "type": "stat", "title": "Evaluation observations",
+      "description": "Estimated observations in the selected range, including repeated processing of committed duplicates. Not a unique transaction count.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 4},
+      "targets": [{"refId": "A", "expr": "sum(increase(fraud_evaluations_total{application=\"fraud-rule-engine\"}[$__range]))", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 1, "noValue": "No samples", "mappings": [{"type": "special", "options": {"match": "null+nan", "result": {"text": "No samples", "color": "gray"}}}], "color": {"mode": "fixed", "fixedColor": "blue"}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "text": {"valueSize": 52}, "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 3, "type": "stat", "title": "High-risk observations",
+      "description": "HIGH_RISK observation estimate in the selected range. An assessment flag, not a fraud confirmation or payment instruction.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 4},
+      "targets": [{"refId": "A", "expr": "sum(increase(fraud_evaluations_total{application=\"fraud-rule-engine\",decision=\"HIGH_RISK\"}[$__range]))", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 1, "noValue": "No samples", "mappings": [{"type": "special", "options": {"match": "null+nan", "result": {"text": "No samples", "color": "gray"}}}], "color": {"mode": "fixed", "fixedColor": "red"}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "text": {"valueSize": 52}, "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 4, "type": "stat", "title": "Review share",
+      "description": "REVIEW observations divided by all observed decisions in the selected range. Not model precision. Blank when no decisions were observed.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 4},
+      "targets": [{"refId": "A", "expr": "(sum(increase(fraud_evaluations_total{application=\"fraud-rule-engine\",decision=\"REVIEW\"}[$__range])) or (0 * sum(increase(fraud_evaluations_total{application=\"fraud-rule-engine\"}[$__range])))) / (sum(increase(fraud_evaluations_total{application=\"fraud-rule-engine\"}[$__range])) > 0)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "decimals": 1, "noValue": "No samples", "mappings": [{"type": "special", "options": {"match": "null+nan", "result": {"text": "No samples", "color": "gray"}}}], "color": {"mode": "fixed", "fixedColor": "orange"}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "text": {"valueSize": 52}, "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 5, "type": "stat", "title": "Undetermined observations",
+      "description": "UNDETERMINED means the assessment could not produce a definitive classification. Investigate missing or insufficient context; do not interpret it as CLEAR.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 4},
+      "targets": [{"refId": "A", "expr": "sum(increase(fraud_evaluations_total{application=\"fraud-rule-engine\",decision=\"UNDETERMINED\"}[$__range]))", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 1, "noValue": "No samples", "mappings": [{"type": "special", "options": {"match": "null+nan", "result": {"text": "No samples", "color": "gray"}}}], "color": {"mode": "fixed", "fixedColor": "purple"}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "text": {"valueSize": 52}, "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 6, "type": "row", "title": "Decision mix and workload", "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 9}
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Decision throughput",
+      "description": "Observed decisions per second, including duplicate redelivery. Stacked to show total throughput and its composition.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 9, "w": 16, "x": 0, "y": 10},
+      "targets": [{"refId": "A", "expr": "sum by (decision) (rate(fraud_evaluations_total{application=\"fraud-rule-engine\"}[$__rate_interval]))", "legendFormat": "{{decision}}"}],
+      "fieldConfig": {
+        "defaults": {"unit": "ops", "min": 0, "noValue": "No samples", "custom": {"drawStyle": "line", "lineInterpolation": "linear", "lineWidth": 2, "fillOpacity": 25, "stacking": {"mode": "normal", "group": "decisions"}, "spanNulls": false}},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "CLEAR"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+          {"matcher": {"id": "byName", "options": "REVIEW"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]},
+          {"matcher": {"id": "byName", "options": "HIGH_RISK"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
+          {"matcher": {"id": "byName", "options": "UNDETERMINED"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "purple"}}]}
+        ]
+      },
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 8, "type": "piechart", "title": "Decision mix | selected range",
+      "description": "Composition of estimated decision observations. No slices when the selected range has no observed increments.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 9, "w": 8, "x": 16, "y": 10},
+      "targets": [{"refId": "A", "expr": "sum by (decision) (increase(fraud_evaluations_total{application=\"fraud-rule-engine\"}[$__range]))", "legendFormat": "{{decision}}", "instant": true}],
+      "fieldConfig": {
+        "defaults": {"unit": "short", "decimals": 1, "noValue": "No samples"},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "CLEAR"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+          {"matcher": {"id": "byName", "options": "REVIEW"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]},
+          {"matcher": {"id": "byName", "options": "HIGH_RISK"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
+          {"matcher": {"id": "byName", "options": "UNDETERMINED"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "purple"}}]}
+        ]
+      },
+      "options": {"pieType": "donut", "displayLabels": ["percent"], "legend": {"displayMode": "table", "placement": "bottom", "values": ["value", "percent"]}, "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 9, "type": "row", "title": "Rule signals and context coverage", "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 19}
+    },
+    {
+      "id": 10, "type": "bargauge", "title": "Rule matches | selected range",
+      "description": "Estimated MATCH observations by configured rule code. One evaluation can match multiple rules; these values must not be summed as transactions.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 20},
+      "targets": [{"refId": "A", "expr": "sort_desc(sum by (rule_code) (increase(fraud_rule_outcomes_total{application=\"fraud-rule-engine\",outcome=\"MATCH\"}[$__range])))", "legendFormat": "{{rule_code}}", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "decimals": 1, "noValue": "No samples", "color": {"mode": "fixed", "fixedColor": "orange"}}, "overrides": []},
+      "options": {"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true, "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 11, "type": "bargauge", "title": "Not-applicable share by rule",
+      "description": "NOT_APPLICABLE / all outcomes for each observed rule in the selected range. Can indicate unavailable context or a rule that does not apply; inspect persisted evidence before drawing conclusions.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 20},
+      "targets": [{"refId": "A", "expr": "(sum by (rule_code) (increase(fraud_rule_outcomes_total{application=\"fraud-rule-engine\",outcome=\"NOT_APPLICABLE\"}[$__range])) or on (rule_code) (0 * sum by (rule_code) (increase(fraud_rule_outcomes_total{application=\"fraud-rule-engine\"}[$__range])))) / (sum by (rule_code) (increase(fraud_rule_outcomes_total{application=\"fraud-rule-engine\"}[$__range])) > 0)", "legendFormat": "{{rule_code}}", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "decimals": 1, "noValue": "No samples", "color": {"mode": "fixed", "fixedColor": "purple"}}, "overrides": []},
+      "options": {"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true, "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 12, "type": "timeseries", "title": "Rule outcome throughput",
+      "description": "MATCH, NO_MATCH and NOT_APPLICABLE observations per second across all rules. Not transaction throughput; each evaluation can emit several outcomes.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 29},
+      "targets": [{"refId": "A", "expr": "sum by (outcome) (rate(fraud_rule_outcomes_total{application=\"fraud-rule-engine\"}[$__rate_interval]))", "legendFormat": "{{outcome}}"}],
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0, "noValue": "No samples", "custom": {"lineWidth": 2, "fillOpacity": 10, "spanNulls": false}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 13, "type": "timeseries", "title": "Listener processing time | p50 / p95 / p99",
+      "description": "Per listener attempt: decoding, key validation and processing, including failed attempts. Excludes retry backoff and DLQ publishing. Not an evaluation-only timer or end-to-end queue latency. Blank while idle.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 29},
+      "targets": [
+        {"refId": "A", "expr": "histogram_quantile(0.50, sum by (le) (rate(fraud_kafka_processing_duration_seconds_bucket{application=\"fraud-rule-engine\"}[$__rate_interval])))", "legendFormat": "p50"},
+        {"refId": "B", "expr": "histogram_quantile(0.95, sum by (le) (rate(fraud_kafka_processing_duration_seconds_bucket{application=\"fraud-rule-engine\"}[$__rate_interval])))", "legendFormat": "p95"},
+        {"refId": "C", "expr": "histogram_quantile(0.99, sum by (le) (rate(fraud_kafka_processing_duration_seconds_bucket{application=\"fraud-rule-engine\"}[$__rate_interval])))", "legendFormat": "p99"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "noValue": "No samples", "custom": {"lineWidth": 2, "spanNulls": false}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "eventId": "synthetic-event-invalid-06",
+  "transactionId": "synthetic-txn-invalid-06",
+  "accountId": "pseudonymous-account-001",
+  "amount": 0.0000000000000000001,
+  "currency": "ZAR",
+  "category": "TRANSFER",
+  "occurredAt": "2026-10-17T12:30:00Z",
+  "schemaVersion": "1.0.0"
+}

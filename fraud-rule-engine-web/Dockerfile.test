@@ -1,0 +1,17 @@
+FROM node:22.22.0-alpine@sha256:e4bf2a82ad0a4037d28035ae71529873c069b13eb0455466ae0bc13363826e34
+
+RUN apk add --no-cache chromium
+WORKDIR /workspace
+COPY fraud-rule-engine-web/package.json fraud-rule-engine-web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY fraud-rule-engine-web/angular.json fraud-rule-engine-web/tsconfig*.json ./
+COPY fraud-rule-engine-web/eslint.config.mjs ./
+COPY fraud-rule-engine-web/src/ src/
+COPY fraud-rule-engine-web/public/ public/
+COPY fraud-rule-engine-web/branding/ branding/
+COPY fraud-rule-engine-web/e2e/ e2e/
+COPY fraud-rule-engine-web/playwright*.ts ./
+RUN chown node:node /workspace
+USER node
+ENV CHROME_BIN=/usr/bin/chromium-browser
+CMD ["sh", "-c", "npm run lint && npm test -- --watch=false --browsers=ChromeHeadless && npm run test:e2e"]

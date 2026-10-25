@@ -1,0 +1,85 @@
+spring:
+  application:
+    name: fraud-rule-engine
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/fraud_rule_engine}
+    username: ${SPRING_DATASOURCE_USERNAME:fraud_rule_engine}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+    consumer:
+      group-id: ${FRAUD_KAFKA_CONSUMER_GROUP:fraud-rule-engine}
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+springdoc:
+  api-docs:
+    enabled: ${fraud.docs.enabled:false}
+  swagger-ui:
+    enabled: ${fraud.docs.enabled:false}
+management:
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
+        fraud:
+          kafka:
+            processing:
+              duration: true
+fraud:
+  docs:
+    enabled: ${FRAUD_DOCS_ENABLED:false}
+  kafka:
+    input-topic: ${FRAUD_KAFKA_INPUT_TOPIC:transaction-events.v1}
+    dlq-topic: ${FRAUD_KAFKA_DLQ_TOPIC:transaction-events.dlq.v1}
+    consumer:
+      concurrency: ${FRAUD_KAFKA_CONCURRENCY:1}
+    topic:
+      partitions: ${FRAUD_KAFKA_TOPIC_PARTITIONS:3}
+      replication-factor: ${FRAUD_KAFKA_TOPIC_REPLICATION_FACTOR:1}
+    retry:
+      interval-ms: ${FRAUD_KAFKA_RETRY_INTERVAL_MS:250}
+      max-retries: ${FRAUD_KAFKA_MAX_RETRIES:2}
+  security:
+    metrics:
+      allowed-cidr: ${FRAUD_SECURITY_METRICS_ALLOWED_CIDR:}
+    local-auth:
+      enabled: ${FRAUD_SECURITY_LOCAL_AUTH_ENABLED:false}
+      issuer: ${FRAUD_SECURITY_LOCAL_AUTH_ISSUER:}
+      audience: ${FRAUD_SECURITY_LOCAL_AUTH_AUDIENCE:}
+      signing-key-base64: ${FRAUD_SECURITY_LOCAL_AUTH_SIGNING_KEY_BASE64:}
+      bootstrap-token: ${FRAUD_SECURITY_LOCAL_AUTH_BOOTSTRAP_TOKEN:}
+      access-token-lifetime: ${FRAUD_SECURITY_LOCAL_AUTH_ACCESS_TOKEN_LIFETIME:PT5M}
+server:
+  max-http-request-header-size: 16KB
+  tomcat:
+    max-http-form-post-size: 1MB
+    max-swallow-size: 1MB
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false

@@ -1,0 +1,62 @@
+HELP.md
+target/
+out/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Local-only configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+# Production-like local secrets
+secrets/
+
+# Frontend dependencies and generated output
+node_modules/
+.angular/
+coverage/
+dist/
+
+# Local planning notes, assessment brief and personal IDE run configurations
+TODO
+.run/
+fraud-rule-engine-web-roadmap.md
+fraud-rule-engine-technical-requirements.md
+
+# Operating system files
+.DS_Store
+Thumbs.db

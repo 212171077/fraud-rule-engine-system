@@ -1,0 +1,259 @@
+:host {
+  display: block;
+  margin: 0 auto;
+  max-width: var(--content-max-width);
+}
+
+.back-link {
+  color: var(--brand-blue);
+  display: inline-flex;
+  font-size: 0.84rem;
+  font-weight: 700;
+  gap: 0.45rem;
+  margin-bottom: 1.4rem;
+  min-height: 44px;
+  align-items: center;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
+.page-heading {
+  margin-bottom: 1.4rem;
+}
+
+h1 {
+  color: var(--brand-blue);
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+
+h2,
+h3 {
+  color: var(--text-primary);
+  margin: 0;
+}
+
+h2 {
+  font-size: 1.05rem;
+}
+
+h3 {
+  font-size: 0.92rem;
+}
+
+.heading-meta,
+.section-heading,
+.rule-heading {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.heading-meta {
+  color: var(--text-muted);
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+  justify-content: flex-start;
+  margin-top: 0.75rem;
+}
+
+.heading-meta strong {
+  color: var(--brand-blue);
+  font-size: 1.05rem;
+  margin-left: 0.25rem;
+}
+
+.status-chip,
+.category-tag,
+.outcome-chip {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 0.4rem 0.65rem;
+  text-transform: capitalize;
+}
+
+.status-chip {
+  background: #edf2f4;
+  color: #354850;
+}
+
+.category-tag {
+  background: #eaf1f4;
+  color: var(--brand-blue);
+  overflow-wrap: anywhere;
+}
+
+.facts-panel,
+.versions-panel,
+.rule-card,
+.state-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+}
+
+.facts-panel,
+.versions-panel {
+  margin-bottom: 1rem;
+  padding: clamp(1rem, 2vw, 1.4rem);
+}
+
+.section-heading {
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.facts-grid,
+.version-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.facts-grid > div,
+.version-grid > div,
+.evidence-list > div {
+  min-width: 0;
+}
+
+dt {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+
+dd {
+  color: var(--text-primary);
+  font-size: 0.83rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.opaque-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.section-description,
+.rule-heading p,
+.reason-code,
+.no-evidence {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.section-description {
+  line-height: 1.5;
+  margin: 0.4rem 0 0;
+  max-width: 70ch;
+}
+
+.rules-section {
+  margin-top: 1.7rem;
+}
+
+.rule-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.rule-card {
+  padding: 1rem 1.1rem;
+}
+
+.rule-heading {
+  align-items: flex-start;
+}
+
+.rule-heading p {
+  margin: 0.25rem 0 0;
+}
+
+.outcome-chip {
+  background: #edf2f4;
+  color: #364850;
+  flex: 0 0 auto;
+  text-align: center;
+}
+
+.outcome-chip--match {
+  background: #fff0ec;
+  color: #8b2b20;
+}
+
+.outcome-chip--no_match {
+  background: #eaf4ee;
+  color: #1f6841;
+}
+
+.outcome-chip--not_applicable,
+.outcome-chip--failed {
+  background: #f0f1f2;
+  color: #45535b;
+}
+
+.reason-code {
+  margin: 0.75rem 0 0;
+}
+
+.reason-code code {
+  color: var(--text-primary);
+}
+
+.evidence-list {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 0.75rem 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0.85rem 0 0;
+  padding-top: 0.8rem;
+}
+
+.no-evidence {
+  margin: 0.8rem 0 0;
+}
+
+.assessment-note {
+  border-left: 3px solid var(--brand-red);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  margin: 1.2rem 0 0;
+  padding: 0.25rem 0 0.25rem 0.85rem;
+}
+
+.state-card {
+  margin: 1rem 0;
+  padding: 1.25rem;
+}
+
+.state-card p {
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0.6rem 0 1rem;
+}
+
+@media (max-width: 760px) {
+  .facts-grid,
+  .version-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .facts-grid,
+  .version-grid,
+  .evidence-list {
+    grid-template-columns: 1fr;
+  }
+
+  .rule-heading {
+    flex-direction: column;
+  }
+}

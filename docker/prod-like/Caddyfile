@@ -1,0 +1,18 @@
+{
+	admin off
+	auto_https disable_redirects
+}
+
+# Actuator is never exposed through the edge; Prometheus scrapes the app directly.
+api.localhost:8443 {
+	tls internal
+	@actuator path /actuator /actuator/*
+	respond @actuator 404
+	@api path /api /api/*
+	handle @api {
+		reverse_proxy app:8080
+	}
+	handle {
+		reverse_proxy web:8080
+	}
+}

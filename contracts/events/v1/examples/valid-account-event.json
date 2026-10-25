@@ -1,0 +1,10 @@
+{
+  "eventId": "synthetic-event-0001",
+  "transactionId": "synthetic-txn-0001",
+  "accountId": "pseudonymous-account-001",
+  "amount": 125.40,
+  "currency": "ZAR",
+  "category": "CARD_PURCHASE",
+  "occurredAt": "2026-10-17T12:30:00+02:00",
+  "schemaVersion": "1.0.0"
+}

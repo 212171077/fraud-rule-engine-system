@@ -1,0 +1,30 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: fraud-ops-email
+    receivers:
+      - uid: fraud-ops-email
+        type: email
+        settings:
+          addresses: ${FRAUD_ALERT_EMAIL_TO}
+          singleEmail: true
+
+# Grafana notification timing, independent of alert-rule evaluation intervals.
+# After editing this provisioned file, reload it with: docker compose restart grafana
+policies:
+  - orgId: 1
+    receiver: fraud-ops-email
+    # Each alert name/severity combination has its own notification group.
+    group_by: [alertname, severity]
+    # Wait before the first notification so related alerts can be grouped.
+    group_wait: 30s
+    # Minimum interval between notifications when an existing group changes,
+    # including resolved alerts; resolution does not wait for repeat_interval.
+    # group_interval: 5m
+    group_interval: 1m
+    # Remind only if the notified group remains firing and unchanged.
+    # This does not delay the first notification or affect rule evaluation.
+    # A short-lived alert may resolve before any four-hour reminder is due.
+    # repeat_interval: 4h
+    repeat_interval: 1m

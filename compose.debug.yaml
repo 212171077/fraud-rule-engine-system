@@ -1,0 +1,9 @@
+# Local development only. Use with compose.yaml, never with the production-like stack.
+services:
+  app:
+    environment:
+      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+    healthcheck:
+      test: ["CMD", "env", "-u", "JAVA_TOOL_OPTIONS", "java", "-cp", "/healthcheck", "HealthCheck"]
+    ports:
+      - "127.0.0.1:5005:5005"

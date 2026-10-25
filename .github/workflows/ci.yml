@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Frontend lint, regression and browser accessibility smoke
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: fraud-rule-engine-web
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.22.0"
+          cache: npm
+          cache-dependency-path: fraud-rule-engine-web/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Lint TypeScript sources and tests
+        run: npm run lint
+      - name: Run Angular tests
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+        run: npm test -- --watch=false --browsers=ChromeHeadless
+      - name: Install browser for smoke tests
+        run: npx playwright install --with-deps chromium
+      - name: Build and run synthetic browser/accessibility smoke
+        run: npm run test:e2e
+
+  unit:
+    name: Build, unit tests, and formatting
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: fraud-rule-engine
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Java 21
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: fraud-rule-engine/pom.xml
+      - name: Build and run unit tests
+        run: ./mvnw -B clean verify
+      - name: Inspect resolved dependency tree
+        run: ./mvnw -B org.apache.maven.plugins:maven-dependency-plugin:3.8.1:tree
+
+  integration:
+    name: PostgreSQL and Kafka integration tests
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: fraud-rule-engine
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Java 21
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: fraud-rule-engine/pom.xml
+      - name: Run integration tests
+        run: ./mvnw -B -Pintegration clean verify
+
+  container:
+    name: Build container image
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Validate Compose configuration
+        run: docker compose --env-file .env.example config --quiet
+      - name: Validate Prometheus configuration
+        run: >-
+          docker run --rm
+          --entrypoint /bin/promtool
+          --volume "$GITHUB_WORKSPACE/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+          prom/prometheus:v3.5.0
+          check config /etc/prometheus/prometheus.yml
+      - name: Validate Grafana dashboard JSON
+        run: jq empty monitoring/grafana/dashboards/service-reliability.json
+      - name: Build application image
+        run: docker build --tag fraud-rule-engine:ci .
+      - name: Build web image
+        run: docker build --file fraud-rule-engine-web/Dockerfile --tag fraud-rule-engine-web:ci .
+      - name: Check web deep links, proxy boundary and Actuator isolation
+        run: bash scripts/test-web-container.sh fraud-rule-engine-web:ci
+
+  security:
+    name: Secret and dependency review
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Scan tracked workspace for secrets
+        run: >-
+          docker run --rm
+          --volume "$GITHUB_WORKSPACE:/repo"
+          zricethezav/gitleaks:v8.24.2
+          detect --source=/repo --no-git --redact --exit-code 1
+      - name: Review dependency changes on pull requests
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@595b5aeba73380359d98a5e087f648dbb0edce1b # v4.7.3
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never
+
+  quality-gate:
+    name: PR quality gate
+    if: ${{ always() }}
+    needs: [web, unit, integration, container, security]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every CI job to succeed
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          if ! jq -e 'all(.[]; .result == "success")' <<< "$JOB_RESULTS"; then
+            echo "::error::Every required CI job must succeed; failures, cancellations and skipped jobs block this gate."
+            exit 1
+          fi

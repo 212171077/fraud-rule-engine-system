@@ -1,0 +1,17 @@
+{
+  "eventId": "synthetic-event-0002",
+  "transactionId": "synthetic-txn-0002",
+  "customerId": "pseudonymous-customer-002",
+  "amount": 0,
+  "currency": "USD",
+  "category": "TRANSFER",
+  "occurredAt": "2026-10-17T10:30:00Z",
+  "merchantId": "synthetic-merchant-01",
+  "location": "synthetic-location-01",
+  "beneficiaryId": "pseudonymous-beneficiary-01",
+  "originCountry": "za",
+  "beneficiaryCountry": "GB",
+  "channel": "MOBILE_APP",
+  "schemaVersion": "1.0.0",
+  "correlationId": "synthetic-correlation-002"
+}

@@ -1,0 +1,16 @@
+<router-outlet />
+<div class="notice-stack" aria-live="polite" aria-relevant="additions">
+  @for (notice of notifications.notices(); track notice.id) {
+    <div
+      class="notice"
+      [class.notice--error]="notice.tone === 'error'"
+      [class.notice--success]="notice.tone === 'success'"
+      role="status"
+    >
+      <span>{{ notice.message }}</span>
+      <button type="button" aria-label="Dismiss notification" (click)="notifications.dismiss(notice.id)">
+        ×
+      </button>
+    </div>
+  }
+</div>

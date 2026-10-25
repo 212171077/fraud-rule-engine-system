@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Fraud Rule Engine
+    orgId: 1
+    folder: Fraud Rule Engine
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /var/lib/grafana/dashboards

@@ -1,0 +1,134 @@
+{
+  "uid": "fraud-kafka-processing",
+  "title": "Kafka Processing",
+  "description": "Listener attempts, failures, consumer lag and acknowledged dead-letter publishing. Operational telemetry, not exactly-once or unique-event accounting.",
+  "tags": ["fraud-rule-engine", "kafka", "assessment"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {"from": "now-1h", "to": "now"},
+  "links": [
+    {"title": "Fraud Operations", "type": "link", "url": "/d/fraud-operations", "keepTime": true},
+    {"title": "Service Reliability", "type": "link", "url": "/d/fraud-service-reliability", "keepTime": true},
+    {"title": "Alert rules", "type": "link", "url": "/alerting/list"}
+  ],
+  "panels": [
+    {
+      "id": 1, "type": "text", "title": "Understand the processing pipeline",
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+      "options": {"mode": "markdown", "content": "**RECEIVED (listener attempt) -> PROCESSED or FAILED -> retry / acknowledged DLQ publish**\n\nA retry is another received attempt. Failed attempts are not unique failed events, and processed includes committed-duplicate redelivery. There is no dedicated retry counter; do not infer retries from received minus processed. DLQ metrics count successful publishes, **not current queue depth**. Window totals are estimates; lifetime counters reset on application restart."}
+    },
+    {
+      "id": 2, "type": "stat", "title": "Processed attempts | selected range",
+      "description": "Estimated successful listener attempts in the selected range, including committed duplicates.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 4},
+      "targets": [{"refId": "A", "expr": "sum(increase(fraud_kafka_events_total{application=\"fraud-rule-engine\",outcome=\"processed\"}[$__range]))", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 1, "noValue": "No samples", "mappings": [{"type": "special", "options": {"match": "null+nan", "result": {"text": "No samples", "color": "gray"}}}], "color": {"mode": "fixed", "fixedColor": "green"}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "text": {"valueSize": 52}, "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 3, "type": "stat", "title": "Failed-attempt share | selected range",
+      "description": "Failed / received listener attempts. Retries count again. Blank when no received attempts were observed.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 4},
+      "targets": [{"refId": "A", "expr": "(sum(increase(fraud_kafka_events_total{application=\"fraud-rule-engine\",outcome=\"failed\"}[$__range])) or (0 * sum(increase(fraud_kafka_events_total{application=\"fraud-rule-engine\",outcome=\"received\"}[$__range])))) / (sum(increase(fraud_kafka_events_total{application=\"fraud-rule-engine\",outcome=\"received\"}[$__range])) > 0)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "decimals": 1, "noValue": "No samples", "mappings": [{"type": "special", "options": {"match": "null+nan", "result": {"text": "No samples", "color": "gray"}}}], "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 0.2}]}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "text": {"valueSize": 52}, "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 4, "type": "stat", "title": "DLQ publishes | last 15m",
+      "description": "Estimated acknowledged dead-letter publishes over the alert's fixed 15m window, independent of the time picker. Not queue depth. Blank if the counter has not been registered.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 4},
+      "targets": [{"refId": "A", "expr": "sum(increase(fraud_kafka_dlq_messages_total{application=\"fraud-rule-engine\"}[15m]))", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 1, "noValue": "No samples", "mappings": [{"type": "special", "options": {"match": "null+nan", "result": {"text": "No samples", "color": "gray"}}}], "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 0.01}]}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "text": {"valueSize": 52}, "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 5, "type": "stat", "title": "Worst consumer lag | now",
+      "description": "Maximum client-reported records lag across consumers/partitions, not total backlog or broker health. Missing consumers or NaN values from idle clients produce no samples, not zero lag.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 4},
+      "targets": [{"refId": "A", "expr": "max(kafka_consumer_fetch_manager_records_lag_max{application=\"fraud-rule-engine\"})", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "noValue": "No samples", "mappings": [{"type": "special", "options": {"match": "null+nan", "result": {"text": "No samples", "color": "gray"}}}], "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1000}]}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "text": {"valueSize": 52}, "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 6, "type": "row", "title": "Throughput, failures and backlog", "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 9}
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Listener attempt throughput",
+      "description": "Received, processed and failed attempts per second. Received overlaps the other outcomes, so these lines must not be stacked.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10},
+      "targets": [{"refId": "A", "expr": "sum by (outcome) (rate(fraud_kafka_events_total{application=\"fraud-rule-engine\"}[$__rate_interval]))", "legendFormat": "{{outcome}}"}],
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0, "noValue": "No samples", "custom": {"lineWidth": 2, "spanNulls": false}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "received"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}]},
+        {"matcher": {"id": "byName", "options": "processed"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "failed"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}
+      ]},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Consumer lag by client",
+      "description": "Client-reported maximum partition lag. A missing line may mean a missing consumer; it is not proof of an empty queue.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 10},
+      "targets": [{"refId": "A", "expr": "max by (client_id) (kafka_consumer_fetch_manager_records_lag_max{application=\"fraud-rule-engine\"})", "legendFormat": "{{client_id}}"}],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "decimals": 0, "noValue": "No samples", "custom": {"lineWidth": 2, "fillOpacity": 15, "spanNulls": false}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 9, "type": "row", "title": "Dead letters and processing cost", "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 18}
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "Acknowledged DLQ publishes | rolling 15m",
+      "description": "Same rolling estimate used by the DLQ alert. Resolves when there are no observed increments in the last 15m, not when the DLQ has been cleared.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 19},
+      "targets": [{"refId": "A", "expr": "sum(increase(fraud_kafka_dlq_messages_total{application=\"fraud-rule-engine\"}[15m]))", "legendFormat": "Published in last 15m"}],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "decimals": 1, "noValue": "No samples", "color": {"mode": "fixed", "fixedColor": "red"}, "custom": {"lineWidth": 2, "fillOpacity": 15, "spanNulls": false}}, "overrides": []},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 11, "type": "timeseries", "title": "Listener attempt duration | p95 / mean",
+      "description": "Includes failed attempts, decoding and key validation; excludes retry backoff, Kafka queue wait and DLQ publication. Not end-to-end latency. Blank while idle.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 19},
+      "targets": [
+        {"refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(fraud_kafka_processing_duration_seconds_bucket{application=\"fraud-rule-engine\"}[$__rate_interval])))", "legendFormat": "p95"},
+        {"refId": "B", "expr": "sum(rate(fraud_kafka_processing_duration_seconds_sum{application=\"fraud-rule-engine\"}[$__rate_interval])) / (sum(rate(fraud_kafka_processing_duration_seconds_count{application=\"fraud-rule-engine\"}[$__rate_interval])) > 0)", "legendFormat": "Mean"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "noValue": "No samples", "custom": {"lineWidth": 2, "spanNulls": false}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 12, "type": "bargauge", "title": "Listener counters | current process lifetimes",
+      "description": "Raw cumulative counters across currently scraped instances, independent of the selected range. Reset on application restart. Useful when a short demo's first increments predate the first scrape. Not durable event counts.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 7, "w": 16, "x": 0, "y": 27},
+      "targets": [{"refId": "A", "expr": "sum by (outcome) (fraud_kafka_events_total{application=\"fraud-rule-engine\"})", "legendFormat": "{{outcome}}", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "decimals": 0, "noValue": "No samples"}, "overrides": [
+        {"matcher": {"id": "byName", "options": "received"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}]},
+        {"matcher": {"id": "byName", "options": "processed"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "failed"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}
+      ]},
+      "options": {"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true, "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 13, "type": "stat", "title": "DLQ publishes | current process lifetimes",
+      "description": "Raw acknowledged-publish counter across current instances. Resets on restart; not queue depth. The first increment of a lazily registered counter can be missed by rate/increase until a baseline scrape exists.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 7, "w": 8, "x": 16, "y": 27},
+      "targets": [{"refId": "A", "expr": "sum(fraud_kafka_dlq_messages_total{application=\"fraud-rule-engine\"})", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "noValue": "No samples", "mappings": [{"type": "special", "options": {"match": "null+nan", "result": {"text": "No samples", "color": "gray"}}}], "color": {"mode": "fixed", "fixedColor": "orange"}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"]}}
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+package com.siciya.c.fraud.domain.rule;
+
+public enum RuleFailureCode {
+  CONTEXT_UNAVAILABLE,
+  REFERENCE_DATA_UNAVAILABLE,
+  INVALID_CONFIGURATION,
+  INVALID_CONTEXT,
+  UNEXPECTED_RULE_ERROR
+}

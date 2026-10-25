@@ -1,0 +1,30 @@
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:8080 {
+	@api path /api /api/*
+	handle @api {
+		reverse_proxy app:8080
+	}
+
+	@actuator path /actuator /actuator/*
+	handle @actuator {
+		respond 404
+	}
+
+	@appConfig path /app-config.json
+	handle @appConfig {
+		root * /srv
+		header Cache-Control "no-store"
+		file_server
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

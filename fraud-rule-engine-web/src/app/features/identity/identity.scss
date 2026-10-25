@@ -1,0 +1,164 @@
+:host {
+  display: block;
+  margin: 0 auto;
+  max-width: var(--content-max-width);
+  min-width: 0;
+}
+
+h1 {
+  color: var(--brand-blue);
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
+  margin: 0 0 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+h2, h3 {
+  color: var(--text-primary);
+  margin: 0 0 0.75rem;
+}
+
+p, dt, small {
+  color: var(--text-muted);
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  margin: 1rem 0;
+  padding: clamp(1rem, 3vw, 1.5rem);
+}
+
+.public-page {
+  margin: 3rem auto;
+  max-width: 38rem;
+  padding: 0 1rem;
+}
+
+.fields, .facts {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  font-weight: 700;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+input, select {
+  background: var(--surface);
+  border: 1px solid #aab8bf;
+  border-radius: 0.4rem;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 400;
+  min-height: 44px;
+  min-width: 0;
+  padding: 0.6rem;
+  width: 100%;
+}
+
+input:focus-visible, select:focus-visible {
+  outline: 3px solid #2f70ef;
+  outline-offset: 2px;
+}
+
+fieldset {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+small {
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.actions, .page-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.confirmation {
+  background: #edf5f8;
+  border-left: 3px solid var(--brand-blue);
+  margin-top: 1rem;
+  overflow-wrap: anywhere;
+  padding: 1rem;
+}
+
+.error {
+  color: #8d2c24;
+}
+
+.badge {
+  background: #edf5f8;
+  border-radius: 0.4rem;
+  color: var(--brand-blue);
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.3rem 0.5rem;
+}
+
+dt {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+dd {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.table-scroll {
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  overflow-x: auto;
+}
+
+table {
+  background: var(--surface);
+  border-collapse: collapse;
+  min-width: 650px;
+  width: 100%;
+}
+
+th, td {
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+  max-width: 20rem;
+  overflow-wrap: anywhere;
+  padding: 0.8rem;
+  text-align: left;
+}
+
+th {
+  background: #edf5f8;
+}
+
+a {
+  color: var(--brand-blue);
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+@media (max-width: 600px) {
+  .fields, .facts {
+    grid-template-columns: 1fr;
+  }
+
+  .public-page {
+    margin-top: 1rem;
+  }
+}

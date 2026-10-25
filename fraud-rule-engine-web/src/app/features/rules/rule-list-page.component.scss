@@ -1,0 +1,265 @@
+:host {
+  display: block;
+  margin: 0 auto;
+  max-width: var(--content-max-width);
+}
+
+.page-heading {
+  margin-bottom: 1.5rem;
+}
+
+h1 {
+  color: var(--brand-blue);
+  font-size: clamp(1.85rem, 3vw, 2.45rem);
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+
+h2 {
+  color: var(--text-primary);
+  font-size: 1rem;
+  margin: 0;
+}
+
+.page-description,
+.scope-panel p,
+.create-action p,
+.assessment-note {
+  color: var(--text-muted);
+}
+
+.page-description {
+  margin: 0.65rem 0 0;
+}
+
+.scope-panel,
+.rule-card,
+.state-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+}
+
+.scope-panel {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem 1.2rem;
+}
+
+.scope-panel p,
+.create-action p {
+  font-size: 0.78rem;
+  margin: 0.25rem 0 0;
+}
+
+.effective-filter {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.effective-filter label {
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.effective-filter input {
+  border: 1px solid #aab8bf;
+  border-radius: 0.4rem;
+  font: inherit;
+  min-height: 44px;
+  padding: 0.45rem;
+}
+
+.create-action {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin: 1.2rem 0;
+}
+
+.rule-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1.2rem;
+}
+
+.rule-card {
+  min-width: 0;
+  padding: 1rem 1.1rem;
+}
+
+.rule-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.rule-category {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+}
+
+.rule-heading h2 {
+  color: var(--brand-blue);
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.state-chip {
+  border-radius: 99px;
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0.4rem 0.6rem;
+}
+
+.state-chip--enabled {
+  background: #eaf4ee;
+  color: #1f6841;
+}
+
+.state-chip--disabled {
+  background: #f0f1f2;
+  color: #45535b;
+}
+
+.rule-facts,
+.parameter-list {
+  display: grid;
+  gap: 0.75rem 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 1rem 0;
+}
+
+dt {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-bottom: 0.2rem;
+}
+
+dd {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.parameters {
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+  padding-top: 0.7rem;
+}
+
+.parameters summary {
+  color: var(--brand-blue);
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 36px;
+  padding-top: 0.35rem;
+}
+
+.parameter-list {
+  margin-bottom: 0.4rem;
+}
+
+.parameters > p {
+  color: var(--text-muted);
+}
+
+.details-link {
+  align-items: center;
+  color: var(--brand-blue);
+  display: inline-flex;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-top: 0.5rem;
+  min-height: 44px;
+}
+
+.assessment-note {
+  border-left: 3px solid var(--brand-red);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  margin: 1.2rem 0 0;
+  padding-left: 0.8rem;
+}
+
+.state-card {
+  margin-top: 1rem;
+  padding: 1.25rem;
+}
+
+.state-card p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.empty-state {
+  margin-top: 1.2rem;
+}
+
+.primary-button,
+.secondary-button {
+  border: 1px solid var(--brand-blue);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 0.55rem 0.85rem;
+}
+
+.primary-button {
+  background: var(--brand-blue);
+  color: #fff;
+}
+
+.secondary-button {
+  background: #fff;
+  color: var(--brand-blue);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 800px) {
+  .scope-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rule-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .effective-filter,
+  .create-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .effective-filter input {
+    width: 100%;
+  }
+
+  .rule-facts,
+  .parameter-list {
+    grid-template-columns: 1fr;
+  }
+}

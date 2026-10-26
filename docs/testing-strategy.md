@@ -4,6 +4,12 @@
 
 Run these commands from the monorepo root.
 
+Validate release/CI fixes from a clean checkout or an export of Git's index,
+not just the working directory: ignored local source files can otherwise hide
+missing files in CI. In particular, `application/port/out/` contains required
+Java interfaces and must remain tracked despite the generated-output `out/`
+ignore rule.
+
 Use JDK 21 and the Maven Wrapper (Maven 3.10.0). The default build runs
 JUnit/Spring context/security tests and the pinned Google Java Format check:
 

@@ -94,8 +94,14 @@ class PersistenceIT {
 
   @Test
   void flywayCreatesSchemaAndDatabaseConstraintsRejectInvalidAndDuplicateData() {
-    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history", Integer.class))
-        .isEqualTo(4);
+    assertThat(
+            jdbc.queryForList(
+                "SELECT version FROM flyway_schema_history ORDER BY installed_rank", String.class))
+        .containsExactly("1", "2", "3", "4", "5", "6");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE NOT success", Integer.class))
+        .isZero();
     assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM fraud_evaluation", Integer.class))
         .isZero();
 

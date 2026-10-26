@@ -9,6 +9,7 @@ import com.siciya.c.fraud.adapter.outbound.persistence.repository.ProcessedEvent
 import com.siciya.c.fraud.adapter.outbound.persistence.repository.ReferenceDataSnapshotRepository;
 import com.siciya.c.fraud.adapter.outbound.persistence.repository.RuleConfigurationSnapshotRepository;
 import com.siciya.c.fraud.application.port.out.EvaluationPersistencePort;
+import com.siciya.c.fraud.domain.decision.FraudDecision;
 import com.siciya.c.fraud.domain.evaluation.ContextData;
 import com.siciya.c.fraud.domain.evaluation.Evaluation;
 import com.siciya.c.fraud.domain.evaluation.EvaluationPage;
@@ -23,7 +24,9 @@ import java.util.EnumMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -100,15 +103,9 @@ public class EvaluationPersistenceAdapter implements EvaluationPersistencePort {
   @Transactional(readOnly = true)
   public EvaluationPage search(EvaluationPageRequest request) {
     Objects.requireNonNull(request, "request");
-    var page =
+    return toDomainPage(
         evaluations.findAllByOrderByEvaluatedAtDescIdDesc(
-            PageRequest.of(request.pageNumber(), request.pageSize()));
-    return new EvaluationPage(
-        page.getContent().stream().map(EvaluationEntity::toDomain).toList(),
-        page.getNumber(),
-        page.getSize(),
-        page.getTotalElements(),
-        page.getTotalPages());
+            PageRequest.of(request.pageNumber(), request.pageSize())));
   }
 
   @Override
@@ -118,14 +115,30 @@ public class EvaluationPersistenceAdapter implements EvaluationPersistencePort {
     Objects.requireNonNull(criteria, "criteria");
     Objects.requireNonNull(request, "request");
     Objects.requireNonNull(sort, "sort");
-    var page =
+    return toDomainPage(
         evaluations.search(
             criteria.from(),
             criteria.to(),
             criteria.decision(),
             criteria.status(),
             criteria.eventId(),
-            PageRequest.of(request.pageNumber(), request.pageSize(), toJpaSort(sort)));
+            PageRequest.of(request.pageNumber(), request.pageSize(), toJpaSort(sort))));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public EvaluationSummary summary(Instant from, Instant to) {
+    Objects.requireNonNull(from, "from");
+    Objects.requireNonNull(to, "to");
+    var counts = new EnumMap<FraudDecision, Long>(FraudDecision.class);
+    evaluations
+        .countByDecisionBetween(from, to)
+        .forEach(row -> counts.put(row.getDecision(), row.getCount()));
+    long total = counts.values().stream().mapToLong(Long::longValue).sum();
+    return new EvaluationSummary(from, to, total, counts);
+  }
+
+  private static EvaluationPage toDomainPage(Page<EvaluationEntity> page) {
     return new EvaluationPage(
         page.getContent().stream().map(EvaluationEntity::toDomain).toList(),
         page.getNumber(),
@@ -134,39 +147,12 @@ public class EvaluationPersistenceAdapter implements EvaluationPersistencePort {
         page.getTotalPages());
   }
 
-  @Override
-  @Transactional(readOnly = true)
-  public EvaluationSummary summary(Instant from, Instant to) {
-    Objects.requireNonNull(from, "from");
-    Objects.requireNonNull(to, "to");
-    var counts =
-        new EnumMap<com.siciya.c.fraud.domain.decision.FraudDecision, Long>(
-            com.siciya.c.fraud.domain.decision.FraudDecision.class);
-    evaluations
-        .countByDecisionBetween(from, to)
-        .forEach(row -> counts.put(row.getDecision(), row.getCount()));
-    long total = counts.values().stream().mapToLong(Long::longValue).sum();
-    return new EvaluationSummary(from, to, total, counts);
-  }
-
-  private static org.springframework.data.domain.Sort toJpaSort(EvaluationSort sort) {
+  private static Sort toJpaSort(EvaluationSort sort) {
     return switch (sort) {
-      case EVALUATED_AT_ASC ->
-          org.springframework.data.domain.Sort.by(
-              org.springframework.data.domain.Sort.Order.asc("evaluatedAt"),
-              org.springframework.data.domain.Sort.Order.asc("id"));
-      case EVALUATED_AT_DESC ->
-          org.springframework.data.domain.Sort.by(
-              org.springframework.data.domain.Sort.Order.desc("evaluatedAt"),
-              org.springframework.data.domain.Sort.Order.desc("id"));
-      case RISK_SCORE_ASC ->
-          org.springframework.data.domain.Sort.by(
-              org.springframework.data.domain.Sort.Order.asc("riskScore"),
-              org.springframework.data.domain.Sort.Order.asc("id"));
-      case RISK_SCORE_DESC ->
-          org.springframework.data.domain.Sort.by(
-              org.springframework.data.domain.Sort.Order.desc("riskScore"),
-              org.springframework.data.domain.Sort.Order.desc("id"));
+      case EVALUATED_AT_ASC -> Sort.by(Sort.Order.asc("evaluatedAt"), Sort.Order.asc("id"));
+      case EVALUATED_AT_DESC -> Sort.by(Sort.Order.desc("evaluatedAt"), Sort.Order.desc("id"));
+      case RISK_SCORE_ASC -> Sort.by(Sort.Order.asc("riskScore"), Sort.Order.asc("id"));
+      case RISK_SCORE_DESC -> Sort.by(Sort.Order.desc("riskScore"), Sort.Order.desc("id"));
     };
   }
 }

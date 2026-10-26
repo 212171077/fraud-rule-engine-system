@@ -10,6 +10,16 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Flags transactions that reach a configured single-amount threshold or a daily cumulative limit.
+ *
+ * <p>Detects unusually large payments and high same-day spend per subject. Limits are configured
+ * per currency ({@code amount_threshold_<ccy>}, {@code daily_limit_<ccy>}) and may be scoped by
+ * category and channel. The rule matches when the transaction amount is greater than or equal to
+ * the amount threshold, or when the amount plus prior qualifying transactions earlier the same UTC
+ * day reaches the daily limit. It is not applicable when no limit exists for the currency or the
+ * transaction is outside the configured scope.
+ */
 public final class ThresholdLimitRule implements FraudRule {
   public static final String CODE = "THRESHOLD_LIMIT";
   private static final long MAX_HISTORY_EVENTS = 10_000;
@@ -21,12 +31,9 @@ public final class ThresholdLimitRule implements FraudRule {
 
   @Override
   public RuleEvaluation evaluate(EvaluationContext context, RuleConfiguration configuration) {
-    RuleEvaluation invalid = RuleSupport.validate(CODE, context, configuration);
-    if (invalid != null) {
-      return invalid;
-    }
-    if (!configuration.enabled()) {
-      return RuleSupport.disabled(configuration);
+    RuleEvaluation precheck = RuleSupport.precheck(CODE, context, configuration);
+    if (precheck != null) {
+      return precheck;
     }
 
     BigDecimal amountThreshold;
@@ -95,7 +102,7 @@ public final class ThresholdLimitRule implements FraudRule {
     }
 
     if (!amountExceeded && !dailyExceeded) {
-      return RuleSupport.result(configuration, RuleOutcome.NO_MATCH, BigDecimal.ZERO, null);
+      return RuleSupport.noMatch(configuration);
     }
     String reasonCode =
         amountExceeded && dailyExceeded
@@ -110,11 +117,7 @@ public final class ThresholdLimitRule implements FraudRule {
       attributes.put("daily_limit_exceeded", "true");
       attributes.put("daily_total", dailyTotal.stripTrailingZeros().toPlainString());
     }
-    return RuleSupport.result(
-        configuration,
-        RuleOutcome.MATCH,
-        configuration.scoreContribution(),
-        new RuleEvidence(reasonCode, attributes));
+    return RuleSupport.match(configuration, new RuleEvidence(reasonCode, attributes));
   }
 
   private static void validateCurrencyParameters(RuleConfiguration configuration, String prefix) {

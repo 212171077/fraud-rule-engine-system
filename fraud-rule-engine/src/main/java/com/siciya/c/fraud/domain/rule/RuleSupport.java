@@ -12,7 +12,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 
 final class RuleSupport {
@@ -31,7 +30,25 @@ final class RuleSupport {
     return null;
   }
 
-  static RuleResult disabled(RuleConfiguration configuration) {
+  /** Returns an outcome when the configuration is invalid or disabled, otherwise null. */
+  static RuleEvaluation precheck(
+      String expectedRuleCode, EvaluationContext context, RuleConfiguration configuration) {
+    RuleEvaluation invalid = validate(expectedRuleCode, context, configuration);
+    if (invalid != null) {
+      return invalid;
+    }
+    return configuration.enabled() ? null : disabled(configuration);
+  }
+
+  static RuleResult noMatch(RuleConfiguration configuration) {
+    return result(configuration, RuleOutcome.NO_MATCH, BigDecimal.ZERO, null);
+  }
+
+  static RuleResult match(RuleConfiguration configuration, RuleEvidence evidence) {
+    return result(configuration, RuleOutcome.MATCH, configuration.scoreContribution(), evidence);
+  }
+
+  private static RuleResult disabled(RuleConfiguration configuration) {
     return result(
         configuration,
         RuleOutcome.NOT_APPLICABLE,
@@ -81,25 +98,17 @@ final class RuleSupport {
         new RuleEvidence(reasonCode, Map.of()));
   }
 
-  static Parameter<BigDecimal> decimal(
+  static BigDecimal decimal(
       RuleConfiguration configuration, String name, BigDecimal defaultValue, BigDecimal min) {
     String raw = configuration.parameters().get(name);
     if (raw == null) {
-      if (defaultValue == null) {
-        throw new InvalidConfigurationException();
-      }
-      return new Parameter<>(defaultValue, null);
+      return defaultValue;
     }
-    BigDecimal parsed;
-    try {
-      parsed = new BigDecimal(raw);
-    } catch (NumberFormatException exception) {
-      throw new InvalidConfigurationException();
-    }
+    BigDecimal parsed = parseDecimal(raw);
     if (parsed.compareTo(min) < 0) {
       throw new InvalidConfigurationException();
     }
-    return new Parameter<>(parsed, null);
+    return parsed;
   }
 
   static long positiveLong(RuleConfiguration configuration, String name, long defaultValue) {
@@ -110,31 +119,12 @@ final class RuleSupport {
       }
       return defaultValue;
     }
-    try {
-      long parsed = Long.parseLong(raw);
-      if (parsed < 1) {
-        throw new InvalidConfigurationException();
-      }
-      return parsed;
-    } catch (NumberFormatException exception) {
-      throw new InvalidConfigurationException();
-    }
+    return parseLong(raw, 1);
   }
 
   static long nonNegativeLong(RuleConfiguration configuration, String name, long defaultValue) {
     String raw = configuration.parameters().get(name);
-    if (raw == null) {
-      return defaultValue;
-    }
-    try {
-      long parsed = Long.parseLong(raw);
-      if (parsed < 0) {
-        throw new InvalidConfigurationException();
-      }
-      return parsed;
-    } catch (NumberFormatException exception) {
-      throw new InvalidConfigurationException();
-    }
+    return raw == null ? defaultValue : parseLong(raw, 0);
   }
 
   static boolean booleanValue(RuleConfiguration configuration, String name, boolean defaultValue) {
@@ -217,12 +207,28 @@ final class RuleSupport {
     if (raw == null) {
       return null;
     }
+    BigDecimal amount = parseDecimal(raw);
+    if (amount.signum() < 0) {
+      throw new InvalidConfigurationException();
+    }
+    return amount;
+  }
+
+  private static BigDecimal parseDecimal(String raw) {
     try {
-      BigDecimal amount = new BigDecimal(raw);
-      if (amount.signum() < 0) {
+      return new BigDecimal(raw);
+    } catch (NumberFormatException exception) {
+      throw new InvalidConfigurationException();
+    }
+  }
+
+  private static long parseLong(String raw, long minimum) {
+    try {
+      long parsed = Long.parseLong(raw);
+      if (parsed < minimum) {
         throw new InvalidConfigurationException();
       }
-      return amount;
+      return parsed;
     } catch (NumberFormatException exception) {
       throw new InvalidConfigurationException();
     }
@@ -262,17 +268,6 @@ final class RuleSupport {
     }
     return value;
   }
-
-  static <T> T parseEnum(RuleConfiguration configuration, String name, Function<String, T> parser) {
-    String value = required(configuration, name);
-    try {
-      return parser.apply(value);
-    } catch (IllegalArgumentException exception) {
-      throw new InvalidConfigurationException();
-    }
-  }
-
-  record Parameter<T>(T value, RuleFailure failure) {}
 
   record ContextValue<T>(T value, RuleEvaluation outcome) {
     boolean hasOutcome() {

@@ -1,5 +1,6 @@
 package com.siciya.c.fraud.adapter.outbound.persistence;
 
+import com.siciya.c.fraud.adapter.outbound.persistence.entity.ProcessedEventEntity;
 import com.siciya.c.fraud.adapter.outbound.persistence.repository.ProcessedEventRepository;
 import com.siciya.c.fraud.application.port.out.TransactionHistoryPort;
 import com.siciya.c.fraud.domain.evaluation.ContextData;
@@ -30,7 +31,7 @@ public class TransactionHistoryAdapter implements TransactionHistoryPort {
     Objects.requireNonNull(subject, "subject");
     Objects.requireNonNull(window, "window");
     var page = PageRequest.of(0, window.limit());
-    List<com.siciya.c.fraud.adapter.outbound.persistence.entity.ProcessedEventEntity> rows =
+    List<ProcessedEventEntity> rows =
         switch (subject.type()) {
           case ACCOUNT ->
               events
@@ -57,7 +58,8 @@ public class TransactionHistoryAdapter implements TransactionHistoryPort {
           retrievedAt);
     }
     return new ContextData.Available<>(
-        new TransactionHistory(rows.stream().map(row -> row.toHistoricalTransaction()).toList()),
+        new TransactionHistory(
+            rows.stream().map(ProcessedEventEntity::toHistoricalTransaction).toList()),
         retrievedAt,
         dataAsOf);
   }

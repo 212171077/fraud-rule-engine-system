@@ -50,10 +50,7 @@ public class RuleConfigurationAdministrationAdapter implements RuleConfiguration
   public Optional<RuleConfigurationSnapshot> snapshotAt(Instant effectiveAt) {
     Objects.requireNonNull(effectiveAt, "effectiveAt");
     return snapshots
-        .findByEffectiveAtLessThanEqualOrderByEffectiveAtDescCapturedAtDesc(
-            effectiveAt, org.springframework.data.domain.PageRequest.of(0, 1))
-        .stream()
-        .findFirst()
+        .findFirstByEffectiveAtLessThanEqualOrderByEffectiveAtDescCapturedAtDesc(effectiveAt)
         .map(RuleConfigurationSnapshotEntity::toDomain);
   }
 

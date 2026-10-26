@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -44,6 +45,9 @@ public class RuleConfigurationManagementService {
   private static final long MAX_DATA_AGE_SECONDS = 31_536_000;
   private static final long MAX_PRIOR_EVENTS = 10_000;
   private static final long MAX_DORMANT_DAYS = 3_650;
+  private static final String CATEGORY_TOKEN = "[A-Z][A-Z0-9_-]{0,63}";
+  private static final String CHANNEL_TOKEN = "[A-Z][A-Z0-9_-]{0,31}";
+  private static final String HOUR_TOKEN = "(?:[0-9]|1[0-9]|2[0-3])";
 
   private final RuleConfigurationAdministrationPort configurations;
   private final Clock clock;
@@ -79,10 +83,8 @@ public class RuleConfigurationManagementService {
       String reasonCode,
       String actor) {
     validateRuleCode(ruleCode);
-    boolean explicitEffectiveAt = effectiveAt != null;
-    Instant start =
-        (explicitEffectiveAt ? effectiveAt : clock.instant()).truncatedTo(ChronoUnit.MICROS);
-    RuleConfigurationSnapshot latest = latestForChange(start, explicitEffectiveAt);
+    Instant start = changeStart(effectiveAt);
+    RuleConfigurationSnapshot latest = latestForChange(start, effectiveAt != null);
     List<RuleConfiguration> next =
         latest == null
             ? new ArrayList<>()
@@ -114,10 +116,8 @@ public class RuleConfigurationManagementService {
       String reasonCode,
       String actor) {
     validateRuleCode(ruleCode);
-    boolean explicitEffectiveAt = effectiveAt != null;
-    Instant start =
-        (explicitEffectiveAt ? effectiveAt : clock.instant()).truncatedTo(ChronoUnit.MICROS);
-    RuleConfigurationSnapshot latest = latestForChange(start, explicitEffectiveAt);
+    Instant start = changeStart(effectiveAt);
+    RuleConfigurationSnapshot latest = latestForChange(start, effectiveAt != null);
     if (latest == null) {
       throw new ApiResourceNotFoundException();
     }
@@ -179,6 +179,11 @@ public class RuleConfigurationManagementService {
     return configurations.saveSnapshot(next, effectiveAt, audit, expectedSnapshotVersion);
   }
 
+  private Instant changeStart(Instant requestedEffectiveAt) {
+    Instant start = requestedEffectiveAt != null ? requestedEffectiveAt : clock.instant();
+    return start.truncatedTo(ChronoUnit.MICROS);
+  }
+
   private RuleConfigurationSnapshot latestForChange(
       Instant effectiveAt, boolean rejectPastEffectiveAt) {
     Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
@@ -207,36 +212,7 @@ public class RuleConfigurationManagementService {
 
   private static void validateParameters(RuleConfiguration configuration) {
     Map<String, String> values = configuration.parameters();
-    Set<String> allowed =
-        switch (configuration.ruleCode()) {
-          case BehavioralAnomalyRule.CODE ->
-              Set.of(
-                  "min_sample_size",
-                  "amount_multiple",
-                  "min_amount_delta",
-                  "category_max_count",
-                  "unusual_hours",
-                  "max_data_age_seconds");
-          case InternalWatchlistRule.CODE, CountryRiskRule.CODE ->
-              Set.of("required", "max_data_age_seconds");
-          case VelocityDuplicationRule.CODE ->
-              Set.of(
-                  "mode",
-                  "lookback_seconds",
-                  "qualifying_only",
-                  "max_events",
-                  "max_data_age_seconds");
-          case DormantAccountRule.CODE ->
-              Set.of(
-                  "dormant_days",
-                  "minimum_amount",
-                  "categories",
-                  "channels",
-                  "max_data_age_seconds");
-          case ThresholdLimitRule.CODE ->
-              Set.of("categories", "channels", "qualifying_only", "max_data_age_seconds");
-          default -> throw new IllegalArgumentException("ruleCode is not supported");
-        };
+    Set<String> allowed = allowedParameters(configuration.ruleCode());
     for (String name : values.keySet()) {
       boolean currencyParameter =
           configuration.ruleCode().equals(ThresholdLimitRule.CODE)
@@ -253,7 +229,7 @@ public class RuleConfigurationManagementService {
         parseOptionalNonNegativeLong(values);
         parseOptionalDecimal(values, "amount_multiple", BigDecimal.ONE);
         parseOptionalDecimal(values, "min_amount_delta", BigDecimal.ZERO);
-        parseOptionalTokens(values, "unusual_hours", "(?:[0-9]|1[0-9]|2[0-3])", false);
+        parseOptionalTokens(values, "unusual_hours", HOUR_TOKEN, false);
       }
       case InternalWatchlistRule.CODE, CountryRiskRule.CODE ->
           parseOptionalBoolean(values, "required");
@@ -274,43 +250,71 @@ public class RuleConfigurationManagementService {
       case DormantAccountRule.CODE -> {
         parseRequiredBoundedLong(values, "dormant_days", MAX_DORMANT_DAYS);
         parseOptionalDecimal(values, "minimum_amount", BigDecimal.ZERO);
-        parseOptionalTokens(values, "categories", "[A-Z][A-Z0-9_-]{0,63}", true);
-        parseOptionalTokens(values, "channels", "[A-Z][A-Z0-9_-]{0,31}", true);
+        parseOptionalTokens(values, "categories", CATEGORY_TOKEN, true);
+        parseOptionalTokens(values, "channels", CHANNEL_TOKEN, true);
       }
       case ThresholdLimitRule.CODE -> {
         parseOptionalBoolean(values, "qualifying_only");
-        parseOptionalTokens(values, "categories", "[A-Z][A-Z0-9_-]{0,63}", true);
-        parseOptionalTokens(values, "channels", "[A-Z][A-Z0-9_-]{0,31}", true);
-        if (values.keySet().stream()
-            .noneMatch(
-                key -> key.startsWith("amount_threshold_") || key.startsWith("daily_limit_"))) {
-          throw new IllegalArgumentException("at least one currency limit is required");
-        }
+        parseOptionalTokens(values, "categories", CATEGORY_TOKEN, true);
+        parseOptionalTokens(values, "channels", CHANNEL_TOKEN, true);
+        validateCurrencyLimits(values);
+      }
+      default -> throw new IllegalArgumentException("ruleCode is not supported");
+    }
+  }
+
+  private static Set<String> allowedParameters(String ruleCode) {
+    return switch (ruleCode) {
+      case BehavioralAnomalyRule.CODE ->
+          Set.of(
+              "min_sample_size",
+              "amount_multiple",
+              "min_amount_delta",
+              "category_max_count",
+              "unusual_hours",
+              "max_data_age_seconds");
+      case InternalWatchlistRule.CODE, CountryRiskRule.CODE ->
+          Set.of("required", "max_data_age_seconds");
+      case VelocityDuplicationRule.CODE ->
+          Set.of(
+              "mode", "lookback_seconds", "qualifying_only", "max_events", "max_data_age_seconds");
+      case DormantAccountRule.CODE ->
+          Set.of(
+              "dormant_days", "minimum_amount", "categories", "channels", "max_data_age_seconds");
+      case ThresholdLimitRule.CODE ->
+          Set.of("categories", "channels", "qualifying_only", "max_data_age_seconds");
+      default -> throw new IllegalArgumentException("ruleCode is not supported");
+    };
+  }
+
+  private static void validateCurrencyLimits(Map<String, String> values) {
+    var limits =
         values.entrySet().stream()
             .filter(
                 entry ->
                     entry.getKey().startsWith("amount_threshold_")
                         || entry.getKey().startsWith("daily_limit_"))
-            .forEach(
-                entry -> {
-                  String currency = entry.getKey().substring(entry.getKey().lastIndexOf('_') + 1);
-                  try {
-                    TransactionEvent.normalizeCurrency(currency.toUpperCase(java.util.Locale.ROOT));
-                  } catch (IllegalArgumentException exception) {
-                    throw new IllegalArgumentException("currency limit parameter is invalid");
-                  }
-                  BigDecimal amount;
-                  try {
-                    amount = new BigDecimal(entry.getValue());
-                  } catch (NumberFormatException exception) {
-                    throw new IllegalArgumentException("currency limit parameter is invalid");
-                  }
-                  if (amount.signum() < 0 || amount.precision() > 38 || amount.scale() > 18) {
-                    throw new IllegalArgumentException("currency limit is out of range");
-                  }
-                });
+            .toList();
+    if (limits.isEmpty()) {
+      throw new IllegalArgumentException("at least one currency limit is required");
+    }
+    for (var limit : limits) {
+      String key = limit.getKey();
+      try {
+        TransactionEvent.normalizeCurrency(
+            key.substring(key.lastIndexOf('_') + 1).toUpperCase(Locale.ROOT));
+      } catch (IllegalArgumentException exception) {
+        throw new IllegalArgumentException("currency limit parameter is invalid");
       }
-      default -> throw new IllegalArgumentException("ruleCode is not supported");
+      BigDecimal amount;
+      try {
+        amount = new BigDecimal(limit.getValue());
+      } catch (NumberFormatException exception) {
+        throw new IllegalArgumentException("currency limit parameter is invalid");
+      }
+      if (amount.signum() < 0 || amount.precision() > 38 || amount.scale() > 18) {
+        throw new IllegalArgumentException("currency limit is out of range");
+      }
     }
   }
 
@@ -392,7 +396,7 @@ public class RuleConfigurationManagementService {
     String[] tokens = value.split(",", -1);
     Set<String> unique = new HashSet<>();
     for (String token : tokens) {
-      String normalized = token.strip().toUpperCase(java.util.Locale.ROOT);
+      String normalized = token.strip().toUpperCase(Locale.ROOT);
       if (!normalized.matches(pattern) || !unique.add(normalized)) {
         throw new IllegalArgumentException("token rule parameter is invalid");
       }

@@ -6,6 +6,13 @@ import com.siciya.c.fraud.domain.evaluation.ReferenceSubjectType;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Flags transactions involving a country listed in the country-risk reference data.
+ *
+ * <p>Detects exposure to higher-risk jurisdictions. The rule matches when the origin or beneficiary
+ * country has an entry in the reference snapshot that is effective at the transaction time. It is
+ * not applicable when the transaction carries no country.
+ */
 public final class CountryRiskRule extends ReferenceMatchRule {
   public static final String CODE = "COUNTRY_RISK";
 

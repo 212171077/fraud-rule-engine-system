@@ -8,6 +8,16 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Flags transactions that deviate from the subject's stored behavioural baseline.
+ *
+ * <p>Detects activity at an unusual UTC hour, in a rarely used category, or with an amount well
+ * above the historical average. The first matching check wins. The rule matches when the hour is
+ * configured as unusual, when the category count in the baseline is at or below {@code
+ * category_max_count}, or when the amount exceeds the average multiplied by {@code amount_multiple}
+ * and the delta reaches {@code min_amount_delta}. It is not applicable when the baseline is missing
+ * or its sample is smaller than {@code min_sample_size}.
+ */
 public final class BehavioralAnomalyRule implements FraudRule {
   public static final String CODE = "BEHAVIORAL_ANOMALY";
 
@@ -18,12 +28,9 @@ public final class BehavioralAnomalyRule implements FraudRule {
 
   @Override
   public RuleEvaluation evaluate(EvaluationContext context, RuleConfiguration configuration) {
-    RuleEvaluation invalid = RuleSupport.validate(CODE, context, configuration);
-    if (invalid != null) {
-      return invalid;
-    }
-    if (!configuration.enabled()) {
-      return RuleSupport.disabled(configuration);
+    RuleEvaluation precheck = RuleSupport.precheck(CODE, context, configuration);
+    if (precheck != null) {
+      return precheck;
     }
 
     long minimumSample;
@@ -34,11 +41,10 @@ public final class BehavioralAnomalyRule implements FraudRule {
     try {
       minimumSample = RuleSupport.positiveLong(configuration, "min_sample_size", 5);
       amountMultiple =
-          RuleSupport.decimal(configuration, "amount_multiple", new BigDecimal("3"), BigDecimal.ONE)
-              .value();
+          RuleSupport.decimal(
+              configuration, "amount_multiple", new BigDecimal("3"), BigDecimal.ONE);
       minimumAmountDelta =
-          RuleSupport.decimal(configuration, "min_amount_delta", BigDecimal.ZERO, BigDecimal.ZERO)
-              .value();
+          RuleSupport.decimal(configuration, "min_amount_delta", BigDecimal.ZERO, BigDecimal.ZERO);
       categoryMaxCount = RuleSupport.nonNegativeLong(configuration, "category_max_count", -1);
       unusualHours =
           RuleSupport.tokenSet(configuration, "unusual_hours", "(?:[0-9]|1[0-9]|2[0-3])");
@@ -99,12 +105,8 @@ public final class BehavioralAnomalyRule implements FraudRule {
       attributes.put("amount_multiple", amountMultiple.stripTrailingZeros().toPlainString());
     }
     if (reasonCode == null) {
-      return RuleSupport.result(configuration, RuleOutcome.NO_MATCH, BigDecimal.ZERO, null);
+      return RuleSupport.noMatch(configuration);
     }
-    return RuleSupport.result(
-        configuration,
-        RuleOutcome.MATCH,
-        configuration.scoreContribution(),
-        new RuleEvidence(reasonCode, attributes));
+    return RuleSupport.match(configuration, new RuleEvidence(reasonCode, attributes));
   }
 }

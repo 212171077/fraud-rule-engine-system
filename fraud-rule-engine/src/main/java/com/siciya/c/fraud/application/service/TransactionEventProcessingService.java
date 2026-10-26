@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,24 +76,44 @@ public class TransactionEventProcessingService implements ProcessTransactionEven
     }
 
     Instant evaluatedAt = clock.instant();
-    var subject = event.subject();
-    ContextData<RuleConfigurationSnapshot> configurationContext =
-        ruleConfigurations.loadSnapshot(evaluatedAt);
-    if (!(configurationContext
-        instanceof ContextData.Available<RuleConfigurationSnapshot> availableConfiguration)) {
-      throw unavailableConfiguration(configurationContext);
-    }
-    RuleConfigurationSnapshot storedSnapshot = availableConfiguration.value();
-    RuleConfigurationSnapshot effectiveSnapshot =
-        new RuleConfigurationSnapshot(
-            storedSnapshot.snapshotVersion(),
-            evaluatedAt,
-            storedSnapshot.capturedAt(),
-            storedSnapshot.configurations().stream()
-                .filter(configuration -> configuration.effectiveAt(evaluatedAt))
-                .toList());
+    RuleConfigurationSnapshot configuration = loadEffectiveConfiguration(evaluatedAt);
+    TransactionWindow window = lookbackWindow(event.occurredAt());
 
-    Instant eventAt = event.occurredAt();
+    var subject = event.subject();
+    var evaluationContext =
+        new EvaluationContext(
+            event,
+            evaluatedAt,
+            history.load(subject, window),
+            baselines.load(subject, evaluatedAt),
+            activities.load(subject, evaluatedAt),
+            referenceData.loadSnapshot(REFERENCE_TYPES, evaluatedAt),
+            configuration);
+    Evaluation evaluation = ruleEvaluationService.evaluate(UUID.randomUUID(), evaluationContext);
+    if (evaluation.status() == ProcessingStatus.FAILED) {
+      throw processingFailure(evaluation);
+    }
+
+    evaluations.save(evaluation);
+    return evaluation;
+  }
+
+  private RuleConfigurationSnapshot loadEffectiveConfiguration(Instant evaluatedAt) {
+    ContextData<RuleConfigurationSnapshot> context = ruleConfigurations.loadSnapshot(evaluatedAt);
+    if (!(context instanceof ContextData.Available<RuleConfigurationSnapshot> available)) {
+      throw unavailableConfiguration(context);
+    }
+    RuleConfigurationSnapshot stored = available.value();
+    return new RuleConfigurationSnapshot(
+        stored.snapshotVersion(),
+        evaluatedAt,
+        stored.capturedAt(),
+        stored.configurations().stream()
+            .filter(configuration -> configuration.effectiveAt(evaluatedAt))
+            .toList());
+  }
+
+  private static TransactionWindow lookbackWindow(Instant eventAt) {
     Instant fromInclusive = eventAt.minus(MAX_LOOKBACK);
     if (fromInclusive.isBefore(MIN_TRANSACTION_TIME)) {
       fromInclusive = MIN_TRANSACTION_TIME;
@@ -100,37 +121,22 @@ public class TransactionEventProcessingService implements ProcessTransactionEven
     if (!fromInclusive.isBefore(eventAt)) {
       throw new PermanentProcessingException("INVALID_EVENT_TIME");
     }
+    return new TransactionWindow(fromInclusive, eventAt, TransactionWindow.MAX_LIMIT);
+  }
 
-    var evaluationContext =
-        new EvaluationContext(
-            event,
-            evaluatedAt,
-            history.load(
-                subject,
-                new TransactionWindow(fromInclusive, eventAt, TransactionWindow.MAX_LIMIT)),
-            baselines.load(subject, evaluatedAt),
-            activities.load(subject, evaluatedAt),
-            referenceData.loadSnapshot(REFERENCE_TYPES, evaluatedAt),
-            effectiveSnapshot);
-    Evaluation evaluation = ruleEvaluationService.evaluate(UUID.randomUUID(), evaluationContext);
-    if (evaluation.status() == ProcessingStatus.FAILED) {
-      var failures =
-          evaluation.ruleEvaluations().stream()
-              .filter(RuleFailure.class::isInstance)
-              .map(RuleFailure.class::cast)
-              .toList();
-      String detail =
-          failures.stream()
-              .map(failure -> failure.ruleCode() + ":" + failure.code())
-              .collect(java.util.stream.Collectors.joining(","));
-      if (failures.stream().anyMatch(RuleFailure::retryable)) {
-        throw new RetryableProcessingException("RULE_CONTEXT_UNAVAILABLE", detail);
-      }
-      throw new PermanentProcessingException("RULE_EVALUATION_FAILED", detail);
-    }
-
-    evaluations.save(evaluation);
-    return evaluation;
+  private static RuntimeException processingFailure(Evaluation evaluation) {
+    var failures =
+        evaluation.ruleEvaluations().stream()
+            .filter(RuleFailure.class::isInstance)
+            .map(RuleFailure.class::cast)
+            .toList();
+    String detail =
+        failures.stream()
+            .map(failure -> failure.ruleCode() + ":" + failure.code())
+            .collect(Collectors.joining(","));
+    return failures.stream().anyMatch(RuleFailure::retryable)
+        ? new RetryableProcessingException("RULE_CONTEXT_UNAVAILABLE", detail)
+        : new PermanentProcessingException("RULE_EVALUATION_FAILED", detail);
   }
 
   private static RuntimeException unavailableConfiguration(

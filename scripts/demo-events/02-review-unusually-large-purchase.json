@@ -1,0 +1,24 @@
+{
+  "description": "Purchase far above the account baseline (behavioural anomaly, 25) is enough for REVIEW.",
+  "event": {
+    "eventId": "evt-c8d20b5e71f3",
+    "transactionId": "txn-1b9a6e4f3d85",
+    "accountId": "pseudonymous-account-001",
+    "amount": 1499.0,
+    "currency": "ZAR",
+    "category": "CARD_PURCHASE",
+    "occurredAt": "2026-10-17T15:05:00+02:00",
+    "merchantId": "merchant-electronics-2217",
+    "location": "Sandton, ZA",
+    "channel": "CARD_ONLINE",
+    "originCountry": "ZA",
+    "schemaVersion": "1.0.0"
+  },
+  "expect": {
+    "decision": "REVIEW",
+    "riskScore": 25,
+    "matched": [
+      "BEHAVIORAL_ANOMALY"
+    ]
+  }
+}

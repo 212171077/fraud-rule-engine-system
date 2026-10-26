@@ -4,11 +4,19 @@ import com.siciya.c.fraud.domain.evaluation.ContextData;
 import com.siciya.c.fraud.domain.evaluation.EvaluationContext;
 import com.siciya.c.fraud.domain.transaction.HistoricalTransaction;
 import com.siciya.c.fraud.domain.transaction.TransactionHistory;
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * Flags bursts of transactions and repeated identical transfers within a look-back window.
+ *
+ * <p>Runs in one of two modes selected by the {@code mode} parameter. {@code VELOCITY} matches when
+ * the current transaction plus prior events inside {@code lookback_seconds} exceed {@code
+ * max_events}. {@code DUPLICATE} matches when a prior event in the window has the same beneficiary,
+ * currency and amount. Only qualifying activity is counted unless {@code qualifying_only} is false.
+ * Duplicate mode is not applicable without a beneficiary.
+ */
 public final class VelocityDuplicationRule implements FraudRule {
   public static final String CODE = "VELOCITY_DUPLICATION";
   private static final long MAX_LOOKBACK_SECONDS = 31_536_000;
@@ -21,12 +29,9 @@ public final class VelocityDuplicationRule implements FraudRule {
 
   @Override
   public RuleEvaluation evaluate(EvaluationContext context, RuleConfiguration configuration) {
-    RuleEvaluation invalid = RuleSupport.validate(CODE, context, configuration);
-    if (invalid != null) {
-      return invalid;
-    }
-    if (!configuration.enabled()) {
-      return RuleSupport.disabled(configuration);
+    RuleEvaluation precheck = RuleSupport.precheck(CODE, context, configuration);
+    if (precheck != null) {
+      return precheck;
     }
 
     String mode;
@@ -83,17 +88,15 @@ public final class VelocityDuplicationRule implements FraudRule {
     if (mode.equals("VELOCITY")) {
       long currentAndPrior = Math.addExact(prior.size(), 1L);
       if (currentAndPrior > maximumEvents) {
-        return RuleSupport.result(
+        return RuleSupport.match(
             configuration,
-            RuleOutcome.MATCH,
-            configuration.scoreContribution(),
             new RuleEvidence(
                 "TRANSACTION_VELOCITY_EXCEEDED",
                 java.util.Map.of(
                     "event_count", Long.toString(currentAndPrior),
                     "lookback_seconds", Long.toString(lookbackSeconds))));
       }
-      return RuleSupport.result(configuration, RuleOutcome.NO_MATCH, BigDecimal.ZERO, null);
+      return RuleSupport.noMatch(configuration);
     }
 
     String beneficiaryId = context.transaction().beneficiaryId();
@@ -108,12 +111,10 @@ public final class VelocityDuplicationRule implements FraudRule {
                         && context.transaction().currency().equals(transaction.currency())
                         && context.transaction().amount().compareTo(transaction.amount()) == 0);
     if (!duplicate) {
-      return RuleSupport.result(configuration, RuleOutcome.NO_MATCH, BigDecimal.ZERO, null);
+      return RuleSupport.noMatch(configuration);
     }
-    return RuleSupport.result(
+    return RuleSupport.match(
         configuration,
-        RuleOutcome.MATCH,
-        configuration.scoreContribution(),
         new RuleEvidence(
             "POSSIBLE_DUPLICATE_TRANSFER",
             java.util.Map.of(

@@ -86,12 +86,27 @@ import { RULE_DEFINITIONS } from './rule-parameter-catalog';
               <header class="rule-heading">
                 <div>
                   <p class="rule-category">{{ ruleLabel(rule.ruleCode) }}</p>
-                  <h2>{{ rule.ruleCode }}</h2>
+                  <h2>
+                    {{ rule.ruleCode }}
+                    <button
+                      class="info-button"
+                      type="button"
+                      [attr.aria-expanded]="infoOpen() === rule.ruleCode"
+                      [attr.aria-controls]="'rule-info-' + rule.ruleCode"
+                      [attr.aria-label]="'About ' + ruleLabel(rule.ruleCode)"
+                      (click)="toggleInfo(rule.ruleCode)"
+                    >
+                      i
+                    </button>
+                  </h2>
                 </div>
                 <span [class]="rule.enabled ? 'state-chip state-chip--enabled' : 'state-chip state-chip--disabled'">
                   {{ rule.enabled ? 'Enabled' : 'Disabled' }}
                 </span>
               </header>
+              @if (infoOpen() === rule.ruleCode) {
+                <p class="rule-info" [id]="'rule-info-' + rule.ruleCode">{{ ruleDetails(rule.ruleCode) }}</p>
+              }
               <dl class="rule-facts">
                 <div>
                   <dt>Version</dt>
@@ -164,6 +179,7 @@ export class RuleListPageComponent implements OnInit {
   readonly filterError = signal('');
   readonly rules = signal<RuleConfiguration[] | null>(null);
   readonly createOpen = signal(false);
+  readonly infoOpen = signal<string | null>(null);
   readonly effectiveAt = new FormControl('', { nonNullable: true });
   readonly selectedEffectiveAt = signal<string | null>(null);
   readonly configuredCodes = signal<string[]>([]);
@@ -198,6 +214,14 @@ export class RuleListPageComponent implements OnInit {
 
   ruleLabel(ruleCode: string): string {
     return RULE_DEFINITIONS.find((rule) => rule.code === ruleCode)?.label ?? ruleCode;
+  }
+
+  ruleDetails(ruleCode: string): string {
+    return RULE_DEFINITIONS.find((rule) => rule.code === ruleCode)?.details ?? 'No description is available.';
+  }
+
+  toggleInfo(ruleCode: string): void {
+    this.infoOpen.update((open) => (open === ruleCode ? null : ruleCode));
   }
 
   parameterEntries(rule: RuleConfiguration): [string, string][] {

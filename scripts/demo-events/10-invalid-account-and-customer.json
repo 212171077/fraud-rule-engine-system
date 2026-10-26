@@ -1,0 +1,18 @@
+{
+  "description": "Schema violation: accountId and customerId are mutually exclusive.",
+  "event": {
+    "eventId": "evt-e60b3d97a4c1",
+    "transactionId": "txn-78c5e2f1b0d6",
+    "accountId": "pseudonymous-account-001",
+    "customerId": "pseudonymous-customer-001",
+    "amount": 45.0,
+    "currency": "ZAR",
+    "category": "CARD_PURCHASE",
+    "occurredAt": "2026-10-17T12:30:00Z",
+    "schemaVersion": "1.0.0"
+  },
+  "expect": {
+    "deadLetter": true,
+    "failureReasonCode": "INVALID_EVENT"
+  }
+}

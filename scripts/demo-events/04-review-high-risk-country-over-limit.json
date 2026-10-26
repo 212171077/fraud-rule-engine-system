@@ -1,0 +1,25 @@
+{
+  "description": "Card payment originating from a high-risk country (15) and over the amount limit (10) adds up to REVIEW.",
+  "event": {
+    "eventId": "evt-5b0f71c4d3a9",
+    "transactionId": "txn-93d2f6a05e18",
+    "accountId": "pseudonymous-account-001",
+    "amount": 5480.75,
+    "currency": "ZAR",
+    "category": "CARD_PURCHASE",
+    "occurredAt": "2026-10-17T19:45:00+02:00",
+    "merchantId": "merchant-travel-0933",
+    "location": "Unknown",
+    "channel": "CARD_ONLINE",
+    "originCountry": "XY",
+    "schemaVersion": "1.0.0"
+  },
+  "expect": {
+    "decision": "REVIEW",
+    "matched": [
+      "THRESHOLD_LIMIT",
+      "COUNTRY_RISK",
+      "BEHAVIORAL_ANOMALY"
+    ]
+  }
+}

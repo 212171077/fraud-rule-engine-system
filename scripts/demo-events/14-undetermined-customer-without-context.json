@@ -1,0 +1,21 @@
+{
+  "description": "Customer subject with no stored context: UNDETERMINED and dead-lettered.",
+  "event": {
+    "eventId": "evt-0d8c47b5e2a9",
+    "transactionId": "txn-f19b3e6a5c84",
+    "customerId": "pseudonymous-customer-045",
+    "amount": 72.3,
+    "currency": "ZAR",
+    "category": "GROCERY",
+    "occurredAt": "2026-10-17T09:00:00+02:00",
+    "merchantId": "merchant-grocer-0412",
+    "location": "Johannesburg, ZA",
+    "channel": "CARD_POS",
+    "originCountry": "ZA",
+    "schemaVersion": "1.0.0"
+  },
+  "expect": {
+    "deadLetter": true,
+    "failureReasonCode": "RULE_EVALUATION_FAILED"
+  }
+}

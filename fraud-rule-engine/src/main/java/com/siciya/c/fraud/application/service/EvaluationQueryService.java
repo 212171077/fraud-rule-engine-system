@@ -1,12 +1,14 @@
 package com.siciya.c.fraud.application.service;
 
 import com.siciya.c.fraud.application.port.out.EvaluationPersistencePort;
+import com.siciya.c.fraud.domain.decision.FraudDecision;
 import com.siciya.c.fraud.domain.evaluation.Evaluation;
 import com.siciya.c.fraud.domain.evaluation.EvaluationPage;
 import com.siciya.c.fraud.domain.evaluation.EvaluationPageRequest;
 import com.siciya.c.fraud.domain.evaluation.EvaluationSearchCriteria;
 import com.siciya.c.fraud.domain.evaluation.EvaluationSort;
 import com.siciya.c.fraud.domain.evaluation.EvaluationSummary;
+import com.siciya.c.fraud.domain.evaluation.ProcessingStatus;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -26,17 +28,16 @@ public class EvaluationQueryService {
   public EvaluationPage search(
       Instant from,
       Instant to,
-      com.siciya.c.fraud.domain.decision.FraudDecision decision,
-      com.siciya.c.fraud.domain.evaluation.ProcessingStatus status,
+      FraudDecision decision,
+      ProcessingStatus status,
       String eventId,
       int page,
       int size,
       String sort) {
     validateRange(from, to);
-    EvaluationPageRequest pageRequest = new EvaluationPageRequest(page, size);
     return persistence.search(
         new EvaluationSearchCriteria(from, to, decision, status, eventId),
-        pageRequest,
+        new EvaluationPageRequest(page, size),
         EvaluationSort.fromApiValue(sort));
   }
 

@@ -1,0 +1,17 @@
+{
+  "description": "Schema violation: occurredAt has no UTC offset.",
+  "event": {
+    "eventId": "evt-a7e05c3b91d4",
+    "transactionId": "txn-4f8d12e6a0b3",
+    "accountId": "pseudonymous-account-001",
+    "amount": 45.0,
+    "currency": "ZAR",
+    "category": "CARD_PURCHASE",
+    "occurredAt": "2026-10-17T12:30:00",
+    "schemaVersion": "1.0.0"
+  },
+  "expect": {
+    "deadLetter": true,
+    "failureReasonCode": "INVALID_EVENT"
+  }
+}

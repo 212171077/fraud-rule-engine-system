@@ -77,8 +77,19 @@ echo "Using Node $(node --version)"
 
 if [[ -d node_modules ]] && [[ -n "$(find node_modules ! -user "$(id -u)" -print -quit)" ]]; then
   echo "node_modules contains files not owned by $(id -un) (likely from a container run)." >&2
-  echo "Fix ownership, then rerun: sudo chown -R \"$(id -un)\":\"$(id -gn)\" fraud-rule-engine-web/node_modules" >&2
-  exit 1
+  chown_command="sudo chown -R $(id -un):$(id -gn) $PWD/node_modules"
+  if [[ -t 0 ]]; then
+    read -r -p "Run '$chown_command' now? [y/N] " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+      $chown_command
+    else
+      echo "Fix ownership, then rerun this script (do not run the script itself with sudo)." >&2
+      exit 1
+    fi
+  else
+    echo "Fix ownership, then rerun this script (do not run the script itself with sudo): $chown_command" >&2
+    exit 1
+  fi
 fi
 if [[ ! -d node_modules/@playwright/test || package-lock.json -nt node_modules/.package-lock.json ]]; then
   echo "Installing locked frontend dependencies (npm ci)..."

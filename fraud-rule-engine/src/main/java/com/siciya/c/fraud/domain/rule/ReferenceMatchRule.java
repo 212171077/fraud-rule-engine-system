@@ -6,11 +6,18 @@ import com.siciya.c.fraud.domain.evaluation.ReferenceDataEntry;
 import com.siciya.c.fraud.domain.evaluation.ReferenceDataSnapshot;
 import com.siciya.c.fraud.domain.evaluation.ReferenceDataType;
 import com.siciya.c.fraud.domain.evaluation.ReferenceSubjectType;
-import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Base for rules that look up transaction attributes in versioned reference data.
+ *
+ * <p>Subclasses supply the candidate subjects to look up. The rule matches on the first candidate
+ * with an effective entry of the configured reference type. A missing snapshot or data type fails
+ * the evaluation when {@code required} is true (the default) and is otherwise not applicable.
+ */
 abstract class ReferenceMatchRule implements FraudRule {
   private final ReferenceDataType dataType;
 
@@ -20,12 +27,9 @@ abstract class ReferenceMatchRule implements FraudRule {
 
   @Override
   public RuleEvaluation evaluate(EvaluationContext context, RuleConfiguration configuration) {
-    RuleEvaluation invalid = RuleSupport.validate(ruleCode(), context, configuration);
-    if (invalid != null) {
-      return invalid;
-    }
-    if (!configuration.enabled()) {
-      return RuleSupport.disabled(configuration);
+    RuleEvaluation precheck = RuleSupport.precheck(ruleCode(), context, configuration);
+    if (precheck != null) {
+      return precheck;
     }
     boolean required;
     try {
@@ -83,19 +87,17 @@ abstract class ReferenceMatchRule implements FraudRule {
               .findFirst()
               .orElse(null);
       if (match != null) {
-        return RuleSupport.result(
-            configuration,
-            RuleOutcome.MATCH,
-            configuration.scoreContribution(),
-            new RuleEvidence(
-                match.reasonCode(),
-                Map.of(
-                    "reference_type", dataType.name(),
-                    "reference_version", Long.toString(version),
-                    "subject_type", candidate.subjectType().name())));
+        Map<String, String> attributes = new LinkedHashMap<>();
+        attributes.put("reference_type", dataType.name());
+        attributes.put("reference_version", Long.toString(version));
+        attributes.put("subject_type", candidate.subjectType().name());
+        if (candidate.subjectType() == ReferenceSubjectType.COUNTRY) {
+          attributes.put("country", candidate.value());
+        }
+        return RuleSupport.match(configuration, new RuleEvidence(match.reasonCode(), attributes));
       }
     }
-    return RuleSupport.result(configuration, RuleOutcome.NO_MATCH, BigDecimal.ZERO, null);
+    return RuleSupport.noMatch(configuration);
   }
 
   protected abstract List<Candidate> candidates(EvaluationContext context);

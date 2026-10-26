@@ -7,7 +7,6 @@ import com.siciya.c.fraud.domain.rule.RuleConfigurationSnapshot;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,12 +26,12 @@ public class RuleConfigurationAdapter implements RuleConfigurationPort {
     Objects.requireNonNull(effectiveAt, "effectiveAt");
     var retrievedAt = clock.instant();
     var matching =
-        snapshots.findByEffectiveAtLessThanEqualOrderByEffectiveAtDescCapturedAtDesc(
-            effectiveAt, PageRequest.of(0, 1));
+        snapshots.findFirstByEffectiveAtLessThanEqualOrderByEffectiveAtDescCapturedAtDesc(
+            effectiveAt);
     if (matching.isEmpty()) {
       return new ContextData.Missing<>(ContextData.MissingReason.NOT_CONFIGURED, retrievedAt);
     }
-    var snapshot = matching.getFirst();
+    var snapshot = matching.get();
     if (snapshot.getCapturedAt().isAfter(retrievedAt)) {
       return new ContextData.Unavailable<>(
           ContextData.DataSource.RULE_CONFIGURATION,

@@ -55,7 +55,7 @@ import { UserFormComponent } from './user-form.component';
               @for (user of page.content; track user.id) {
                 <tr>
                   <td>{{ user.name }} {{ user.surname }}</td><td>{{ user.email }}</td>
-                  <td>{{ user.role }}</td><td><span class="badge">{{ user.status }}</span></td>
+                  <td>{{ user.role }}</td><td><span [class]="'badge status-' + user.status.toLowerCase()">{{ user.status }}</span></td>
                   <td><a [routerLink]="['/users', user.id]" [attr.aria-label]="'Manage ' + user.email">Manage</a></td>
                 </tr>
               }

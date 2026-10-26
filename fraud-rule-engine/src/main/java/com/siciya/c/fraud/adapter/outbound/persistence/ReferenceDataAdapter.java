@@ -10,7 +10,6 @@ import java.time.Instant;
 import java.util.EnumMap;
 import java.util.Objects;
 import java.util.Set;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,12 +34,12 @@ public class ReferenceDataAdapter implements ReferenceDataPort {
     }
     var retrievedAt = clock.instant();
     var matching =
-        snapshots.findByEffectiveAtLessThanEqualOrderByEffectiveAtDescCapturedAtDesc(
-            effectiveAt, PageRequest.of(0, 1));
+        snapshots.findFirstByEffectiveAtLessThanEqualOrderByEffectiveAtDescCapturedAtDesc(
+            effectiveAt);
     if (matching.isEmpty()) {
       return new ContextData.Missing<>(ContextData.MissingReason.NOT_CONFIGURED, retrievedAt);
     }
-    var entity = matching.getFirst();
+    var entity = matching.get();
     if (entity.getCapturedAt().isAfter(retrievedAt)) {
       return new ContextData.Unavailable<>(
           ContextData.DataSource.REFERENCE_DATA,

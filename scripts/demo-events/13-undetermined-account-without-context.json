@@ -1,0 +1,21 @@
+{
+  "description": "Account with no stored baseline, history or activity: rules cannot be evaluated, so the decision is UNDETERMINED, nothing is stored and the event is dead-lettered.",
+  "event": {
+    "eventId": "evt-96f3a1d0e7b2",
+    "transactionId": "txn-a8e4c59b2d70",
+    "accountId": "pseudonymous-account-120",
+    "amount": 349.0,
+    "currency": "ZAR",
+    "category": "CARD_PURCHASE",
+    "occurredAt": "2026-10-17T10:15:00+02:00",
+    "merchantId": "merchant-clothing-1180",
+    "location": "Durban, ZA",
+    "channel": "CARD_POS",
+    "originCountry": "ZA",
+    "schemaVersion": "1.0.0"
+  },
+  "expect": {
+    "deadLetter": true,
+    "failureReasonCode": "RULE_EVALUATION_FAILED"
+  }
+}

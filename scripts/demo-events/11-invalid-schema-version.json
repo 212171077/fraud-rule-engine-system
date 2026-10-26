@@ -1,0 +1,17 @@
+{
+  "description": "Unsupported schemaVersion is dead-lettered.",
+  "event": {
+    "eventId": "evt-7d14a8e3c0f5",
+    "transactionId": "txn-2a9e6b41d8c7",
+    "accountId": "pseudonymous-account-001",
+    "amount": 45.0,
+    "currency": "ZAR",
+    "category": "CARD_PURCHASE",
+    "occurredAt": "2026-10-17T12:30:00Z",
+    "schemaVersion": "9.9.9"
+  },
+  "expect": {
+    "deadLetter": true,
+    "failureReasonCode": "INVALID_EVENT"
+  }
+}

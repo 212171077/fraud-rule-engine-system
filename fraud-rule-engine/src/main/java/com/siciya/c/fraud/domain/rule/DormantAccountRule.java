@@ -8,6 +8,14 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Flags activity on an account that has been inactive for a configured period.
+ *
+ * <p>Detects reactivation of dormant accounts, a common account-takeover signal. The rule matches
+ * when a transaction in scope (category, channel and minimum amount) occurs at least {@code
+ * dormant_days} after the account's last qualifying activity. It is not applicable when the
+ * transaction is out of scope or no prior activity is known.
+ */
 public final class DormantAccountRule implements FraudRule {
   public static final String CODE = "DORMANT_ACCOUNT";
   private static final long MAX_DORMANT_DAYS = 3_650;
@@ -19,12 +27,9 @@ public final class DormantAccountRule implements FraudRule {
 
   @Override
   public RuleEvaluation evaluate(EvaluationContext context, RuleConfiguration configuration) {
-    RuleEvaluation invalid = RuleSupport.validate(CODE, context, configuration);
-    if (invalid != null) {
-      return invalid;
-    }
-    if (!configuration.enabled()) {
-      return RuleSupport.disabled(configuration);
+    RuleEvaluation precheck = RuleSupport.precheck(CODE, context, configuration);
+    if (precheck != null) {
+      return precheck;
     }
 
     long dormantDays;
@@ -37,8 +42,7 @@ public final class DormantAccountRule implements FraudRule {
         throw new RuleSupport.InvalidConfigurationException();
       }
       minimumAmount =
-          RuleSupport.decimal(configuration, "minimum_amount", BigDecimal.ZERO, BigDecimal.ZERO)
-              .value();
+          RuleSupport.decimal(configuration, "minimum_amount", BigDecimal.ZERO, BigDecimal.ZERO);
       categories = RuleSupport.tokenSet(configuration, "categories", "[A-Z][A-Z0-9_-]{0,63}");
       channels = RuleSupport.tokenSet(configuration, "channels", "[A-Z][A-Z0-9_-]{0,31}");
     } catch (RuleSupport.InvalidConfigurationException exception) {
@@ -84,12 +88,10 @@ public final class DormantAccountRule implements FraudRule {
       return RuleSupport.failure(configuration, RuleFailureCode.INVALID_CONTEXT, false);
     }
     if (inactivity.compareTo(Duration.ofDays(dormantDays)) < 0) {
-      return RuleSupport.result(configuration, RuleOutcome.NO_MATCH, BigDecimal.ZERO, null);
+      return RuleSupport.noMatch(configuration);
     }
-    return RuleSupport.result(
+    return RuleSupport.match(
         configuration,
-        RuleOutcome.MATCH,
-        configuration.scoreContribution(),
         new RuleEvidence(
             "DORMANT_ACCOUNT_REACTIVATED",
             Map.of(

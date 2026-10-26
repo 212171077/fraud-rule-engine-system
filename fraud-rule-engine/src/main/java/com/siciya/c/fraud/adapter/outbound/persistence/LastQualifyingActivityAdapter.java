@@ -31,16 +31,16 @@ public class LastQualifyingActivityAdapter implements LastQualifyingActivityPort
         .findFirstBySubjectTypeAndSubjectIdAndOccurredAtLessThanEqualOrderByOccurredAtDescIdDesc(
             subject.type(), subject.identifier(), evaluatedAt)
         .<ContextData<LastQualifyingActivity>>map(
-            activity -> {
-              if (activity.toDomain().dataAsOf().isAfter(retrievedAt)) {
+            entity -> {
+              var activity = entity.toDomain();
+              if (activity.dataAsOf().isAfter(retrievedAt)) {
                 return new ContextData.Unavailable<>(
                     ContextData.DataSource.ACCOUNT_ACTIVITY,
                     ContextData.UnavailableReason.INVALID_RESPONSE,
                     false,
                     retrievedAt);
               }
-              return new ContextData.Available<>(
-                  activity.toDomain(), retrievedAt, activity.toDomain().dataAsOf());
+              return new ContextData.Available<>(activity, retrievedAt, activity.dataAsOf());
             })
         .orElseGet(
             () ->

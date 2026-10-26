@@ -1,0 +1,23 @@
+{
+  "description": "Context is too old for a rule, so the decision is UNDETERMINED. Nothing is stored; the event is retried 3 times and dead-lettered.",
+  "staleContext": true,
+  "event": {
+    "eventId": "evt-b05e2c7f48a3",
+    "transactionId": "txn-5c1d8a3e9f06",
+    "accountId": "pseudonymous-account-001",
+    "amount": 219.0,
+    "currency": "ZAR",
+    "category": "CARD_PURCHASE",
+    "occurredAt": "2026-10-18T11:00:00+02:00",
+    "merchantId": "merchant-fuel-0071",
+    "location": "Pretoria, ZA",
+    "channel": "CARD_POS",
+    "originCountry": "ZA",
+    "schemaVersion": "1.0.0"
+  },
+  "expect": {
+    "deadLetter": true,
+    "failureReasonCode": "PROCESSING_RETRIES_EXHAUSTED",
+    "deliveryAttempts": 3
+  }
+}

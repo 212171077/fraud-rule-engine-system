@@ -1,0 +1,17 @@
+{
+  "description": "Schema violation: amount precision is beyond what the contract allows.",
+  "event": {
+    "eventId": "evt-3c92f8a1d5e7",
+    "transactionId": "txn-d1a47b60c3e9",
+    "accountId": "pseudonymous-account-001",
+    "amount": 1e-19,
+    "currency": "ZAR",
+    "category": "TRANSFER",
+    "occurredAt": "2026-10-17T12:30:00Z",
+    "schemaVersion": "1.0.0"
+  },
+  "expect": {
+    "deadLetter": true,
+    "failureReasonCode": "INVALID_EVENT"
+  }
+}

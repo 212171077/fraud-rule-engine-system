@@ -51,6 +51,7 @@ application routes.
 | Integration tests (`*IT`) | Verify real PostgreSQL persistence and Kafka consumer behavior, including delivery failures. | Testcontainers and Docker. |
 | Contract tests | Verify proposed synthetic event and DLQ schemas/examples; these do not imply producer approval. | Pinned JSON Schema validator; no upstream schema is assumed. |
 | API tests | Verify authentication, bounded search/summary queries, safe evaluation projections, Problem Details, rule validation/versioning/audit, and the OpenAPI YAML paths. | Spring MockMvc, H2, and SnakeYAML; no Docker. |
+| Identity-provider tests | Run real bearer tokens through the resource-server chain: OIDC discovery, JWKS download, signature, issuer, audience, expiry, subject and `roles` mapping (`JwtResourceServerWireMockTest`). | WireMock (test scope) as a synthetic identity provider; no Docker. |
 | CI | Require frontend lint/tests/browser smoke, unit/build/format, integration, Compose/image, and secret/dependency jobs through `PR quality gate`. | GitHub Actions, Java 21, Node 22, Docker; required branch check configured by an administrator. |
 
 Keep test data synthetic and deterministic. Avoid time-sensitive assertions

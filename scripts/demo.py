@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Repeatable end-to-end demo against the running local stack (./run-local.sh, `local` profile).
 
-Publishes synthetic events to Kafka and verifies each outcome through the REST API and the
+Publishes the synthetic events in scripts/demo-events (one JSON scenario per file, see the README
+there) to Kafka and verifies each outcome through the REST API and the
 dead-letter topic. Exits non-zero if any check fails. Uses only synthetic data and creates rule
 configuration versions (audited) as part of the run.
 """
@@ -21,8 +22,8 @@ API = os.environ.get("DEMO_API", "http://localhost:8080")
 INPUT_TOPIC = "transaction-events.v1"
 DLQ_TOPIC = "transaction-events.dlq.v1"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EVENTS_DIR = os.path.join(ROOT, "scripts", "demo-events")
 RUN = uuid.uuid4().hex[:8]
-ACCOUNT = "pseudonymous-account-001"  # has seeded history, baseline and activity
 FRESH = "31536000"  # seeded context is static, so allow it to be up to a year old
 # Evaluations are searched by evaluation time; the API allows at most a 90-day window.
 NOW = datetime.datetime.now(datetime.timezone.utc)
@@ -83,12 +84,6 @@ def dead_letters():
     return letters
 
 
-def event(suffix, amount, category, occurred_at, **extra):
-    return {"eventId": f"demo-{RUN}-{suffix}", "transactionId": f"demo-{RUN}-txn-{suffix}",
-            "accountId": ACCOUNT, "amount": amount, "currency": "ZAR", "category": category,
-            "occurredAt": occurred_at, "schemaVersion": "1.0.0", **extra}
-
-
 def evaluations(admin, event_id):
     query = urllib.parse.urlencode({"from": FROM, "to": TO, "eventId": event_id})
     status, page = call("GET", f"/api/v1/fraud-evaluations?{query}", admin)
@@ -132,108 +127,129 @@ def configure_rules(admin):
         check(f"rule {code} configured (HTTP {status})", status in (200, 201))
 
 
+def load_scenarios():
+    """One JSON file per scenario in scripts/demo-events, run in file-name order."""
+    scenarios = []
+    for name in sorted(os.listdir(EVENTS_DIR)):
+        if not name.endswith(".json"):
+            continue
+        with open(os.path.join(EVENTS_DIR, name)) as handle:
+            scenario = json.load(handle)
+        scenario["name"] = name[:-5]
+        payload = scenario["event"]
+        for field in ("eventId", "transactionId"):
+            if field in payload:
+                payload[field] = f"demo-{RUN}-{payload[field]}"
+        scenarios.append(scenario)
+    return scenarios
+
+
+def key_of(payload):
+    return payload.get("accountId") or payload.get("customerId") or payload.get("eventId") or "none"
+
+
+def identifiers_of(payload):
+    return [payload[f] for f in ("accountId", "customerId", "beneficiaryId") if payload.get(f)]
+
+
+def check_evaluation(scenario, detail, admin):
+    name, expect = scenario["name"], scenario.get("expect", {})
+    check(f"[{name}] evaluated", detail is not None)
+    if detail is None:
+        return
+    matched = sorted(code for code, outcome in outcomes(detail).items() if outcome == "MATCH")
+    if "decision" in expect:
+        check(f"[{name}] decision is {expect['decision']}",
+              detail["decision"] == expect["decision"], detail["decision"])
+    if "riskScore" in expect:
+        check(f"[{name}] risk score is {expect['riskScore']}",
+              float(detail["riskScore"]) == float(expect["riskScore"]), str(detail["riskScore"]))
+    if "matched" in expect:
+        check(f"[{name}] matched rules are {sorted(expect['matched'])}",
+              matched == sorted(expect["matched"]), str(matched))
+    check(f"[{name}] rule and reference versions recorded",
+          detail["ruleConfigurationVersion"] >= 1 and bool(detail["referenceDataVersions"]))
+    body = json.dumps(detail)
+    check(f"[{name}] subject identifiers are not exposed",
+          not any(value in body for value in identifiers_of(scenario["event"])))
+    print(f"      decision={detail['decision']} riskScore={detail['riskScore']} matched={matched}")
+    if scenario.get("redeliver"):
+        publish(key_of(scenario["event"]), scenario["event"])
+        time.sleep(8)
+        again = evaluations(admin, scenario["event"]["eventId"])
+        check(f"[{name}] redelivery keeps exactly one unchanged evaluation",
+              len(again) == 1 and again[0]["evaluationId"] == detail["evaluationId"], str(len(again)))
+
+
+def check_dead_letters(scenarios, admin):
+    letters = {d.get("eventId"): d for d in dead_letters()}
+    for scenario in scenarios:
+        name, event_id = scenario["name"], scenario["event"].get("eventId")
+        letter = letters.get(event_id)
+        check(f"[{name}] reached the DLQ", letter is not None)
+        if letter:
+            check(f"[{name}] DLQ record is versioned with a replay payload",
+                  letter["schemaVersion"] == "1.0.0" and bool(letter["originalPayloadBase64"]))
+            expected = scenario["expect"].get("failureReasonCode")
+            if expected:
+                check(f"[{name}] DLQ reason is {expected}",
+                      letter["failureReasonCode"] == expected, letter["failureReasonCode"])
+            attempts = scenario["expect"].get("deliveryAttempts")
+            if attempts:
+                check(f"[{name}] delivery attempts are {attempts}",
+                      letter["deliveryAttempts"] == attempts, str(letter["deliveryAttempts"]))
+            print(f"      failureReasonCode={letter['failureReasonCode']} "
+                  f"attempts={letter['deliveryAttempts']}")
+        check(f"[{name}] produced no evaluation", not evaluations(admin, event_id))
+
+
+def run_dead_letter_scenarios(scenarios, admin):
+    for scenario in scenarios:
+        publish(key_of(scenario["event"]), scenario["event"])
+    time.sleep(10)
+    check_dead_letters(scenarios, admin)
+
+
 def main():
     admin, analyst = token("admin"), token("analyst")
-    print(f"Demo run {RUN} against {API}\n")
+    scenarios = load_scenarios()
+    print(f"Demo run {RUN} against {API}: {len(scenarios)} scenarios from {EVENTS_DIR}\n")
 
     print("== Rule configuration (audited versions) ==")
     configure_rules(admin)
 
-    print("\n== Normal event ==")
-    normal = event("normal", 90.00, "CARD_PURCHASE", "2026-10-17T12:30:00+02:00")
-    publish(ACCOUNT, normal)
-    detail = await_evaluation(admin, normal["eventId"])
-    check("normal event evaluated", detail is not None)
-    if detail:
-        check("normal event decision is CLEAR", detail["decision"] == "CLEAR", detail["decision"])
-        check("normal event has no MATCH outcomes",
-              "MATCH" not in outcomes(detail).values(), str(outcomes(detail)))
+    evaluated = [s for s in scenarios if "decision" in s.get("expect", {}) or "matched" in s.get("expect", {})]
+    dead = [s for s in scenarios if "deadLetter" in s.get("expect", {}) and not s.get("staleContext")]
+    stale = [s for s in scenarios if s.get("staleContext")]
+    decisions = {}
 
-    print("\n== Flagged event: all five rule categories ==")
-    flagged = event("flagged", 9000.00, "TRANSFER", "2026-10-20T10:30:00Z",
-                    beneficiaryId="pseudonymous-beneficiary-demo", originCountry="XY",
-                    correlationId=f"demo-{RUN}-corr")
-    publish(ACCOUNT, flagged)
-    detail = await_evaluation(admin, flagged["eventId"])
-    check("flagged event evaluated", detail is not None)
-    flagged_id = None
-    if detail:
-        flagged_id = detail["evaluationId"]
-        matched = outcomes(detail)
-        for code in ("THRESHOLD_LIMIT", "BEHAVIORAL_ANOMALY", "DORMANT_ACCOUNT",
-                     "INTERNAL_WATCHLIST", "COUNTRY_RISK"):
-            check(f"{code} matched", matched.get(code) == "MATCH", str(matched.get(code)))
-        check("multi-rule decision is not CLEAR", detail["decision"] != "CLEAR", detail["decision"])
-        check("risk score is the matched contributions capped at 100 (105 raw)",
-              float(detail["riskScore"]) == 100.0, str(detail["riskScore"]))
-        check("rule configuration and reference versions are recorded",
-              detail["ruleConfigurationVersion"] >= 1 and bool(detail["referenceDataVersions"]))
-        check("subject identifiers are not exposed",
-              ACCOUNT not in json.dumps(detail)
-              and "pseudonymous-beneficiary-demo" not in json.dumps(detail))
-        print(f"      decision={detail['decision']} riskScore={detail['riskScore']}")
+    print("\n== Evaluated events ==")
+    for scenario in evaluated:
+        print(f"-- {scenario['name']}: {scenario.get('description', '')}")
+        publish(key_of(scenario["event"]), scenario["event"])
+        detail = await_evaluation(admin, scenario["event"]["eventId"])
+        check_evaluation(scenario, detail, admin)
+        if detail:
+            decisions[detail["evaluationId"]] = (detail["decision"], float(detail["riskScore"]))
 
-    print("\n== Duplicate delivery ==")
-    publish(ACCOUNT, flagged)
-    time.sleep(8)
-    again = evaluations(admin, flagged["eventId"])
-    check("redelivered event keeps exactly one evaluation", len(again) == 1, str(len(again)))
-    check("evaluation is unchanged", bool(again) and again[0]["evaluationId"] == flagged_id)
+    print("\n== Invalid events (dead-lettered) ==")
+    run_dead_letter_scenarios(dead, admin)
 
-    print("\n== Velocity/duplicate-transaction rule ==")
-    repeat = event("repeat", 9000.00, "TRANSFER", "2026-10-20T10:40:00Z",
-                   beneficiaryId="pseudonymous-beneficiary-demo")
-    publish(ACCOUNT, repeat)
-    detail = await_evaluation(admin, repeat["eventId"])
-    check("repeated transaction evaluated", detail is not None)
-    if detail:
-        check("VELOCITY_DUPLICATION matched",
-              outcomes(detail).get("VELOCITY_DUPLICATION") == "MATCH",
-              str(outcomes(detail).get("VELOCITY_DUPLICATION")))
-
-    print("\n== Invalid event ==")
-    invalid_id = f"demo-{RUN}-invalid"
-    publish(ACCOUNT, {"eventId": invalid_id, "transactionId": "x", "accountId": ACCOUNT,
-                      "amount": 1, "currency": "ZAR", "category": "CARD_PURCHASE",
-                      "occurredAt": "2026-10-17T12:30:00+02:00", "schemaVersion": "1.0.0",
-                      "unexpectedField": "x"})
-    time.sleep(8)
-    letters = {d.get("eventId"): d for d in dead_letters()}
-    letter = letters.get(invalid_id)
-    check("invalid event reached the DLQ", letter is not None)
-    if letter:
-        check("DLQ metadata is versioned and carries a replay payload",
-              letter["schemaVersion"] == "1.0.0" and bool(letter["originalPayloadBase64"]))
-        print(f"      failureReasonCode={letter['failureReasonCode']} "
-              f"attempts={letter['deliveryAttempts']}")
-    check("invalid event produced no evaluation", not evaluations(admin, invalid_id))
-
-    print("\n== Retry exhaustion ==")
-    stale = event("retry", 50.00, "CARD_PURCHASE", "2026-10-18T09:00:00Z")
-    baseline_parameters = {"min_sample_size": "2", "amount_multiple": "3"}
-    status, _ = call("PATCH", "/api/v1/fraud-rules/BEHAVIORAL_ANOMALY", admin,
-                     {"parameters": {**baseline_parameters, "max_data_age_seconds": "1"},
-                      "reasonCode": "DEMO_FORCE_STALE_CONTEXT"})
-    check("rule temporarily made to treat context as stale", status == 200, str(status))
-    try:
-        time.sleep(1)
-        publish(ACCOUNT, stale)
-        time.sleep(10)
-        letters = {d.get("eventId"): d for d in dead_letters()}
-        letter = letters.get(stale["eventId"])
-        check("event with unavailable context was dead-lettered", letter is not None)
-        if letter:
-            check("retries are bounded (3 delivery attempts)",
-                  letter["deliveryAttempts"] == 3, str(letter["deliveryAttempts"]))
-            check("DLQ reason is PROCESSING_RETRIES_EXHAUSTED",
-                  letter["failureReasonCode"] == "PROCESSING_RETRIES_EXHAUSTED",
-                  letter["failureReasonCode"])
-        check("no partial evaluation was stored", not evaluations(admin, stale["eventId"]))
-    finally:
+    print("\n== Retry exhaustion (context treated as stale) ==")
+    if stale:
+        baseline_parameters = {"min_sample_size": "2", "amount_multiple": "3"}
         status, _ = call("PATCH", "/api/v1/fraud-rules/BEHAVIORAL_ANOMALY", admin,
-                         {"parameters": {**baseline_parameters, "max_data_age_seconds": FRESH},
-                          "reasonCode": "DEMO_RESTORE"})
-        check("rule restored", status == 200, str(status))
+                         {"parameters": {**baseline_parameters, "max_data_age_seconds": "1"},
+                          "reasonCode": "DEMO_FORCE_STALE_CONTEXT"})
+        check("rule temporarily made to treat context as stale", status == 200, str(status))
+        try:
+            time.sleep(1)
+            run_dead_letter_scenarios(stale, admin)
+        finally:
+            status, _ = call("PATCH", "/api/v1/fraud-rules/BEHAVIORAL_ANOMALY", admin,
+                             {"parameters": {**baseline_parameters, "max_data_age_seconds": FRESH},
+                              "reasonCode": "DEMO_RESTORE"})
+            check("rule restored", status == 200, str(status))
 
     print("\n== Historical versions and API access ==")
     status, history = call("GET", "/api/v1/fraud-rules/BEHAVIORAL_ANOMALY/history", analyst)
@@ -241,10 +257,11 @@ def main():
     check("rule history lists the audited versions", len(entries) >= 3, str(len(entries)))
     check("audit entries keep a pseudonymous actor reference and reason code",
           all(len(e["actorReference"]) == 64 and e["reasonCode"] for e in entries))
-    if flagged_id:
-        status, detail = call("GET", "/api/v1/fraud-evaluations/" + flagged_id, analyst)
+    for evaluation_id, (decision, score) in decisions.items():
+        status, detail = call("GET", "/api/v1/fraud-evaluations/" + evaluation_id, analyst)
         check("earlier decision is still retrievable and unchanged after rule updates",
-              status == 200 and float(detail["riskScore"]) == 100.0, str(status))
+              status == 200 and detail["decision"] == decision and float(detail["riskScore"]) == score,
+              str(status))
     status, _ = call("POST", "/api/v1/fraud-rules", analyst,
                      {"ruleCode": "X", "enabled": True, "scoreContribution": 1, "parameters": {},
                       "reasonCode": "X"})

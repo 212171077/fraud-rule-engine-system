@@ -1,0 +1,22 @@
+{
+  "description": "Everyday grocery purchase in line with the account baseline: no rule matches.",
+  "event": {
+    "eventId": "evt-a41f7c0e92b8",
+    "transactionId": "txn-7d3e51a9c204",
+    "accountId": "pseudonymous-account-001",
+    "amount": 89.95,
+    "currency": "ZAR",
+    "category": "GROCERY",
+    "occurredAt": "2026-10-17T12:30:00+02:00",
+    "merchantId": "merchant-grocer-0412",
+    "location": "Cape Town, ZA",
+    "channel": "CARD_POS",
+    "originCountry": "ZA",
+    "schemaVersion": "1.0.0"
+  },
+  "expect": {
+    "decision": "CLEAR",
+    "riskScore": 0,
+    "matched": []
+  }
+}

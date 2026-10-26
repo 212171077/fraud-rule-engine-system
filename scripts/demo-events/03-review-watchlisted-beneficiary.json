@@ -1,0 +1,24 @@
+{
+  "description": "Transfer to a watchlisted beneficiary (40) reaches REVIEW without reaching HIGH_RISK.",
+  "event": {
+    "eventId": "evt-2e96a3d8f05c",
+    "transactionId": "txn-e47c80b2a916",
+    "accountId": "pseudonymous-account-001",
+    "amount": 189.5,
+    "currency": "ZAR",
+    "category": "TRANSFER",
+    "occurredAt": "2026-10-17T16:20:00+02:00",
+    "beneficiaryId": "pseudonymous-beneficiary-demo",
+    "beneficiaryCountry": "ZA",
+    "channel": "MOBILE_APP",
+    "originCountry": "ZA",
+    "schemaVersion": "1.0.0"
+  },
+  "expect": {
+    "decision": "REVIEW",
+    "riskScore": 40,
+    "matched": [
+      "INTERNAL_WATCHLIST"
+    ]
+  }
+}

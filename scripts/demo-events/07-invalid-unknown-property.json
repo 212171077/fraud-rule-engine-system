@@ -1,0 +1,18 @@
+{
+  "description": "Schema violation: unknown property is rejected and dead-lettered.",
+  "event": {
+    "eventId": "evt-19d7b4f2e8a0",
+    "transactionId": "txn-6e3a0c95b7d2",
+    "accountId": "pseudonymous-account-001",
+    "amount": 45.0,
+    "currency": "ZAR",
+    "category": "CARD_PURCHASE",
+    "occurredAt": "2026-10-17T12:30:00+02:00",
+    "schemaVersion": "1.0.0",
+    "deviceFingerprint": "x"
+  },
+  "expect": {
+    "deadLetter": true,
+    "failureReasonCode": "INVALID_EVENT"
+  }
+}

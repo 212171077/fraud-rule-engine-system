@@ -1,0 +1,28 @@
+{
+  "description": "Ten minutes later the same beneficiary, currency and amount are sent again (VELOCITY_DUPLICATION also matches).",
+  "event": {
+    "eventId": "evt-84c1e9b7a2d6",
+    "transactionId": "txn-b25f03d8c971",
+    "accountId": "pseudonymous-account-001",
+    "amount": 8750.0,
+    "currency": "ZAR",
+    "category": "TRANSFER",
+    "occurredAt": "2026-10-20T12:40:00+02:00",
+    "beneficiaryId": "pseudonymous-beneficiary-demo",
+    "beneficiaryCountry": "XY",
+    "channel": "INTERNET_BANKING",
+    "originCountry": "XY",
+    "schemaVersion": "1.0.0"
+  },
+  "expect": {
+    "decision": "HIGH_RISK",
+    "matched": [
+      "BEHAVIORAL_ANOMALY",
+      "COUNTRY_RISK",
+      "DORMANT_ACCOUNT",
+      "INTERNAL_WATCHLIST",
+      "THRESHOLD_LIMIT",
+      "VELOCITY_DUPLICATION"
+    ]
+  }
+}

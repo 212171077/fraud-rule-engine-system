@@ -12,7 +12,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize, Subscription } from 'rxjs';
 import { Evaluation, RuleEvaluation } from '../../core/api/api.models';
 import { EvaluationApiService } from '../../core/api/evaluation-api.service';
-
+import { describeReason, humanizeKey, humanizeValue } from '../../shared/labels';
 @Component({
   selector: 'app-evaluation-detail-page',
   imports: [DatePipe, DecimalPipe, RouterLink],
@@ -127,7 +127,7 @@ import { EvaluationApiService } from '../../core/api/evaluation-api.service';
                   </span>
                 </header>
                 @if (rule.reasonCode) {
-                  <p class="reason-code">Reason: <code>{{ rule.reasonCode }}</code></p>
+                  <p class="reason-code">Reason: {{ reasonDescription(rule) }}</p>
                 }
                 @if (evidenceEntries(rule).length > 0) {
                   <dl class="evidence-list">
@@ -195,8 +195,12 @@ export class EvaluationDetailPageComponent implements OnInit {
       : 'outcome-chip';
   }
 
+  reasonDescription(rule: RuleEvaluation): string {
+    return describeReason(rule.reasonCode ?? '', rule.evidence, rule.ruleCode);
+  }
+
   evidenceEntries(rule: RuleEvaluation): [string, string][] {
-    return Object.entries(rule.evidence);
+    return Object.entries(rule.evidence).map(([key, value]) => [humanizeKey(key), humanizeValue(value)]);
   }
 
   referenceDataEntries(evaluation: Evaluation): [string, number][] {

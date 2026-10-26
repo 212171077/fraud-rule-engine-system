@@ -7,6 +7,7 @@ import com.siciya.c.fraud.domain.evaluation.ReferenceDataSnapshot;
 import com.siciya.c.fraud.domain.evaluation.ReferenceDataType;
 import com.siciya.c.fraud.domain.evaluation.ReferenceSubjectType;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -86,14 +87,14 @@ abstract class ReferenceMatchRule implements FraudRule {
               .findFirst()
               .orElse(null);
       if (match != null) {
-        return RuleSupport.match(
-            configuration,
-            new RuleEvidence(
-                match.reasonCode(),
-                Map.of(
-                    "reference_type", dataType.name(),
-                    "reference_version", Long.toString(version),
-                    "subject_type", candidate.subjectType().name())));
+        Map<String, String> attributes = new LinkedHashMap<>();
+        attributes.put("reference_type", dataType.name());
+        attributes.put("reference_version", Long.toString(version));
+        attributes.put("subject_type", candidate.subjectType().name());
+        if (candidate.subjectType() == ReferenceSubjectType.COUNTRY) {
+          attributes.put("country", candidate.value());
+        }
+        return RuleSupport.match(configuration, new RuleEvidence(match.reasonCode(), attributes));
       }
     }
     return RuleSupport.noMatch(configuration);

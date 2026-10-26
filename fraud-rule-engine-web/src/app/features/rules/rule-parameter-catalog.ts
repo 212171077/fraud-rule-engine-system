@@ -2,6 +2,7 @@ export interface RuleDefinition {
   code: string;
   label: string;
   description: string;
+  details: string;
   parameters: readonly RuleParameterDefinition[];
 }
 
@@ -19,6 +20,8 @@ export const RULE_DEFINITIONS: readonly RuleDefinition[] = [
     code: 'BEHAVIORAL_ANOMALY',
     label: 'Behavioral anomaly',
     description: 'Compares event attributes with the available synthetic behavior baseline.',
+    details:
+      'Detects deviations from an established customer behavior baseline: an unusual transaction hour (UTC), a category that is uncommon for the customer, or an amount materially above their normal pattern. A personal baseline is only applied once the minimum sample size is met; with insufficient history the rule is not applicable rather than treated as normal.',
     parameters: [
       { name: 'min_sample_size', description: 'Minimum baseline sample size; positive integer.' },
       { name: 'amount_multiple', description: 'Amount multiple; decimal >= 1.' },
@@ -32,6 +35,8 @@ export const RULE_DEFINITIONS: readonly RuleDefinition[] = [
     code: 'INTERNAL_WATCHLIST',
     label: 'Internal watchlist',
     description: 'Uses exact matching against local synthetic reference data only.',
+    details:
+      'Flags a transaction whose customer, merchant or beneficiary matches a versioned, locally seeded synthetic internal watchlist using exact, normalized matching. A match is a risk signal only and does not imply a legal or compliance determination; no live external lists are used.',
     parameters: [
       { name: 'required', description: 'Whether missing reference data is a required-context failure.' },
       { name: 'max_data_age_seconds', description: 'Context freshness limit; 1–31,536,000 seconds.' },
@@ -41,6 +46,8 @@ export const RULE_DEFINITIONS: readonly RuleDefinition[] = [
     code: 'COUNTRY_RISK',
     label: 'Country risk',
     description: 'Uses exact matching against local synthetic reference data only.',
+    details:
+      'Flags a transaction whose relevant country matches a versioned, locally seeded synthetic country-risk list using exact, normalized matching. A match is a risk signal only and does not imply a legal or compliance determination; no live external lists are used.',
     parameters: [
       { name: 'required', description: 'Whether missing reference data is a required-context failure.' },
       { name: 'max_data_age_seconds', description: 'Context freshness limit; 1–31,536,000 seconds.' },
@@ -50,6 +57,8 @@ export const RULE_DEFINITIONS: readonly RuleDefinition[] = [
     code: 'VELOCITY_DUPLICATION',
     label: 'Velocity / possible duplication',
     description: 'Select VELOCITY or DUPLICATE mode; window semantics are assessment-scoped.',
+    details:
+      'Detects unusually frequent activity (VELOCITY: more than the allowed number of events within the lookback window) or repeated transfers (DUPLICATE: the same beneficiary, amount and currency within the window). The current event is excluded from its own history.',
     parameters: [
       { name: 'mode', description: 'Required: VELOCITY or DUPLICATE.', required: true },
       { name: 'lookback_seconds', description: 'Required lookback; 1–31,536,000 seconds.', required: true },
@@ -62,6 +71,8 @@ export const RULE_DEFINITIONS: readonly RuleDefinition[] = [
     code: 'DORMANT_ACCOUNT',
     label: 'Dormant account',
     description: 'Uses last qualifying activity and the configured dormant-period scope.',
+    details:
+      'Flags a transaction when an account with no qualifying activity for the configured dormancy period becomes active, optionally limited by minimum amount, category or channel. It is a risk signal, not proof of fraud; missing activity data is never assumed to mean dormant or active.',
     parameters: [
       { name: 'dormant_days', description: 'Required dormant interval; 1–3,650 days.', required: true },
       { name: 'minimum_amount', description: 'Minimum amount; decimal >= 0.' },
@@ -74,6 +85,8 @@ export const RULE_DEFINITIONS: readonly RuleDefinition[] = [
     code: 'THRESHOLD_LIMIT',
     label: 'Threshold / daily limit',
     description: 'Uses per-currency values; no currency conversion is performed.',
+    details:
+      'Flags a transaction that exceeds a configured per-transaction amount threshold or breaches an aggregate daily limit. Limits are configured per currency (no conversion), use UTC daily windows, and can be scoped by category or channel.',
     parameters: [
       {
         name: 'amount_threshold_<currency>',

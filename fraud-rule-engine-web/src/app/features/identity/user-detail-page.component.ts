@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
@@ -8,6 +7,7 @@ import { UserProfile, UserRole, UserStatus } from '../../core/api/api.models';
 import { UserApiService } from '../../core/api/user-api.service';
 import { AuthSessionService } from '../../core/auth/auth-session.service';
 import { NotificationService } from '../../core/notifications/notification.service';
+import { AccountSummaryComponent } from './account-summary.component';
 import { UserFormComponent } from './user-form.component';
 
 type AccessChange =
@@ -16,9 +16,9 @@ type AccessChange =
 
 @Component({
   selector: 'app-user-detail-page',
-  imports: [DatePipe, ReactiveFormsModule, RouterLink, UserFormComponent],
+  imports: [AccountSummaryComponent, ReactiveFormsModule, RouterLink, UserFormComponent],
   template: `
-    <a routerLink="/users">Back to users</a>
+    <a class="back-link" routerLink="/users">← Back to users</a>
     <p class="eyebrow">LOCAL IDENTITY ADMINISTRATION</p>
     <h1>Manage account</h1>
     @if (failed()) {
@@ -30,13 +30,8 @@ type AccessChange =
       <p role="status">Loading account…</p>
     } @else if (user(); as account) {
       <section class="panel">
-        <h2>{{ account.name }} {{ account.surname }}</h2>
-        <dl class="facts">
-          <div><dt>Role</dt><dd>{{ account.role }}</dd></div>
-          <div><dt>Status</dt><dd>{{ account.status }}</dd></div>
-          <div><dt>Created (UTC)</dt><dd>{{ account.createdAt | date: 'yyyy-MM-dd HH:mm:ss' : 'UTC' }}</dd></div>
-          <div><dt>Updated (UTC)</dt><dd>{{ account.updatedAt | date: 'yyyy-MM-dd HH:mm:ss' : 'UTC' }}</dd></div>
-        </dl>
+        <app-account-summary [user]="account" [showUpdated]="true" />
+        <h3 class="section-title">Edit details</h3>
         <p>Profile updates also revoke this account's existing tokens.</p>
         <app-user-form mode="profile" [user]="account" (saved)="profileSaved($event)" />
       </section>

@@ -1,16 +1,16 @@
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { finalize } from 'rxjs';
 import { UserProfile } from '../../core/api/api.models';
 import { UserApiService } from '../../core/api/user-api.service';
 import { AuthSessionService } from '../../core/auth/auth-session.service';
 import { NotificationService } from '../../core/notifications/notification.service';
+import { AccountSummaryComponent } from './account-summary.component';
 import { PasswordChangeComponent } from './password-change.component';
 import { UserFormComponent } from './user-form.component';
 
 @Component({
   selector: 'app-profile-page',
-  imports: [DatePipe, UserFormComponent, PasswordChangeComponent],
+  imports: [AccountSummaryComponent, UserFormComponent, PasswordChangeComponent],
   template: `
     <p class="eyebrow">ASSESSMENT ACCOUNT</p>
     <h1>My profile</h1>
@@ -21,17 +21,11 @@ import { UserFormComponent } from './user-form.component';
       </section>
     } @else if (profile(); as user) {
       <section class="panel">
-        <h2>{{ user.name }} {{ user.surname }}</h2>
-        <dl class="facts">
-          <div><dt>Role</dt><dd>{{ user.role }}</dd></div>
-          <div><dt>Status</dt><dd>{{ user.status }}</dd></div>
-          <div><dt>Created (UTC)</dt><dd>{{ user.createdAt | date: 'yyyy-MM-dd HH:mm:ss' : 'UTC' }}</dd></div>
-        </dl>
+        <app-account-summary [user]="user" />
         @if (canWrite()) {
+          <h3 class="section-title">Edit details</h3>
           <p>Profile updates revoke existing tokens. You will be signed out after saving.</p>
           <app-user-form mode="profile" [user]="user" (saved)="saved($event)" />
-        } @else {
-          <p>{{ user.email }}</p>
         }
       </section>
       @if (canWrite()) { <app-password-change /> }

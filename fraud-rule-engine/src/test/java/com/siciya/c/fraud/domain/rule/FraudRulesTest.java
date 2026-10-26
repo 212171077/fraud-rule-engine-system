@@ -163,6 +163,20 @@ class FraudRulesTest {
                 .evidence()
                 .reasonCode())
         .isEqualTo("COUNTRY_RISK");
+    assertThat(
+            ((RuleResult)
+                    countryRisk.evaluate(context, configuration(countryRisk.ruleCode(), Map.of())))
+                .evidence()
+                .attributes())
+        .containsEntry("subject_type", "COUNTRY")
+        .containsEntry("country", "ZA");
+    assertThat(
+            ((RuleResult)
+                    watchlist.evaluate(context, configuration(watchlist.ruleCode(), Map.of())))
+                .evidence()
+                .attributes())
+        .containsEntry("subject_type", "ACCOUNT")
+        .doesNotContainValue("account-1");
 
     EvaluationContext noMatch =
         context(

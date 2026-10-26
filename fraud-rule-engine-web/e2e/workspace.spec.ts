@@ -187,3 +187,16 @@ test('rule review displays replacement parameters and saves the numeric input', 
   await expect(page.getByText('THRESHOLD_LIMIT version 2 created.', { exact: true })).toBeVisible();
   expect(updates).toBe(1);
 });
+
+test('rule card info icon toggles the rule description', async ({ page }) => {
+  await mockApi(page);
+  await signIn(page);
+  await navigate(page, 'Rules');
+  const info = page.getByRole('button', { name: 'About Threshold / daily limit' });
+  await expect(info).toHaveAttribute('aria-expanded', 'false');
+  await info.click();
+  await expect(info).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.rule-info')).toContainText('aggregate daily limit');
+  await info.click();
+  await expect(page.locator('.rule-info')).toHaveCount(0);
+});

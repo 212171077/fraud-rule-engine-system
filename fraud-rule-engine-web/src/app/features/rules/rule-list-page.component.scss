@@ -114,6 +114,39 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.info-button {
+  background: var(--surface);
+  border: 1px solid var(--brand-blue);
+  border-radius: 50%;
+  color: var(--brand-blue);
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-style: italic;
+  font-weight: 800;
+  height: 1.3rem;
+  line-height: 1;
+  margin-left: 0.35rem;
+  vertical-align: middle;
+  width: 1.3rem;
+}
+
+.info-button:focus-visible,
+.info-button[aria-expanded='true'] {
+  background: var(--brand-blue);
+  color: #fff;
+}
+
+.rule-info {
+  background: #f4f7fa;
+  border-left: 3px solid var(--brand-blue);
+  border-radius: 0.4rem;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.75rem;
+}
+
 .state-chip {
   border-radius: 99px;
   flex: 0 0 auto;

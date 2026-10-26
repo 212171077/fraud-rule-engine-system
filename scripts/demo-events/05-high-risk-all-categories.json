@@ -1,0 +1,30 @@
+{
+  "description": "Large transfer after a dormant spell to a watchlisted beneficiary from a high-risk country: every rule category matches and the score is capped at 100. Redelivery must not create a second evaluation.",
+  "redeliver": true,
+  "event": {
+    "eventId": "evt-f3a85d1e60b7",
+    "transactionId": "txn-0c6b94e2d7f1",
+    "accountId": "pseudonymous-account-001",
+    "amount": 8750.0,
+    "currency": "ZAR",
+    "category": "TRANSFER",
+    "occurredAt": "2026-10-20T12:30:00+02:00",
+    "beneficiaryId": "pseudonymous-beneficiary-demo",
+    "beneficiaryCountry": "XY",
+    "channel": "INTERNET_BANKING",
+    "originCountry": "XY",
+    "correlationId": "corr-6a2d9f40b18c",
+    "schemaVersion": "1.0.0"
+  },
+  "expect": {
+    "decision": "HIGH_RISK",
+    "riskScore": 100,
+    "matched": [
+      "BEHAVIORAL_ANOMALY",
+      "COUNTRY_RISK",
+      "DORMANT_ACCOUNT",
+      "INTERNAL_WATCHLIST",
+      "THRESHOLD_LIMIT"
+    ]
+  }
+}

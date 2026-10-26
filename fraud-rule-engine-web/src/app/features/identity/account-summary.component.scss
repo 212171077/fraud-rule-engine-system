@@ -1,0 +1,100 @@
+:host {
+  display: block;
+}
+
+.identity {
+  align-items: center;
+  display: flex;
+  gap: 1.1rem;
+  margin-bottom: 1.25rem;
+}
+
+.avatar {
+  align-items: center;
+  background: linear-gradient(135deg, var(--brand-blue), #0a6a9c);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgb(0 72 109 / 30%);
+  color: #fff;
+  display: inline-flex;
+  flex: none;
+  font-size: 1.4rem;
+  font-weight: 700;
+  height: 4rem;
+  justify-content: center;
+  letter-spacing: 0.04em;
+  width: 4rem;
+}
+
+.who {
+  min-width: 0;
+}
+
+h2 {
+  color: var(--text-primary);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.email {
+  color: var(--text-muted);
+  margin: 0.15rem 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  background: #edf5f8;
+  border-radius: 999px;
+  color: var(--brand-blue);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.7rem;
+}
+
+.status-active {
+  background: #e3f4ea;
+  color: #1b6b3a;
+}
+
+.status-pending {
+  background: #fff3d6;
+  color: #8a5a00;
+}
+
+.status-disabled {
+  background: #fde7e6;
+  color: #9b2622;
+}
+
+.facts {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  margin: 0;
+}
+
+.facts div {
+  background: #f6f9fa;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  padding: 0.7rem 0.9rem;
+}
+
+dt {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+dd {
+  font-weight: 600;
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+}

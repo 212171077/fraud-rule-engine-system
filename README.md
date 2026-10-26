@@ -33,11 +33,54 @@ You do not need Java or Node on the host to run the stack: the images build the 
 
 ## 2. Configure `.env`
 
-Create a `.env` file in the **repository root** (next to `compose.yaml`). The values in `.env.example` work for
-local use as they are, so copy it unchanged:
+Create a file named `.env` in the **repository root** (next to `compose.yaml`) with the content below
+(it is the same as `.env.example`, so `cp .env.example .env` also works). Then generate the two empty secrets and
+paste them in:
 
 ```sh
-cp .env.example .env
+openssl rand -base64 32   # -> FRAUD_SECURITY_LOCAL_AUTH_SIGNING_KEY_BASE64
+openssl rand -base64 32   # -> FRAUD_SECURITY_LOCAL_AUTH_BOOTSTRAP_TOKEN
+```
+
+```dotenv
+# Local development credentials only. Change locally; never reuse in deployment.
+POSTGRES_DB=fraud_rule_engine
+POSTGRES_USER=fraud_rule_engine
+POSTGRES_PASSWORD=Password@123
+POSTGRES_PORT=5432
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/fraud_rule_engine
+SPRING_DATASOURCE_USERNAME=fraud_rule_engine
+SPRING_DATASOURCE_PASSWORD=Password@123
+SPRING_KAFKA_BOOTSTRAP_SERVERS=localhost:19092
+KAFKA_PORT=19092
+APP_PORT=8080
+PROMETHEUS_PORT=9090
+GRAFANA_PORT=3000
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=Password@123
+# Reserve this subnet for the local monitoring network; Prometheus uses this fixed address.
+MONITORING_SUBNET=172.30.0.0/24
+PROMETHEUS_METRICS_IP=172.30.0.10
+# Leave empty for local work; protected routes then deny all requests.
+# Set both values only for a reachable, configured OIDC provider.
+# Optional assessment-only local account mode. Keep disabled in deployment and
+# supply high-entropy secrets through a local untracked .env file or secret store.
+# Generate each of the two values below with `openssl rand -base64 32`.
+FRAUD_SECURITY_LOCAL_AUTH_ENABLED=false
+FRAUD_SECURITY_LOCAL_AUTH_ISSUER=
+FRAUD_SECURITY_LOCAL_AUTH_AUDIENCE=
+FRAUD_SECURITY_LOCAL_AUTH_SIGNING_KEY_BASE64=
+FRAUD_SECURITY_LOCAL_AUTH_BOOTSTRAP_TOKEN=
+FRAUD_SECURITY_LOCAL_AUTH_ACCESS_TOKEN_LIFETIME=PT5M
+
+FRAUD_DOCS_ENABLED=true
+
+FRAUD_ALERT_EMAIL_TO=fraud-ops@example.invalid
+MAILPIT_PORT=8025
+DEMO_ADMIN_EMAIL=admin@example.test
+DEMO_ADMIN_PASSWORD=Password@123
+DEMO_ANALYST_EMAIL=analyst@example.test
+DEMO_ANALYST_PASSWORD=Password@123
 ```
 
 `.env` is git-ignored and read by Docker Compose. Then create the `secrets/` directory in the repository root
